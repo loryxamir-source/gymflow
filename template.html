@@ -305,7 +305,9 @@ function athensWallClockToInstant(isoDate, time) {
 function isCompleted(isoDate, time, todayISO, nowHHMM) {
   if (isoDate < todayISO) return true;
   if (isoDate > todayISO) return false;
-  return time <= nowHHMM;
+  // Strictly "<" (not "<="): an appointment at 13:20 stays blue for the whole
+  // 13:20 minute and only turns green once the clock reaches 13:21.
+  return time < nowHHMM;
 }
 
 // -- Beep (no audio file needed, generated in-browser) --
