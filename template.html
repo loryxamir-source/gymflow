@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="GymFlow" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#ffffff" />
+<link rel="apple-touch-icon" href="data:image/png;base64,{{ICON_BASE64}}" />
+<link rel="icon" href="data:image/png;base64,{{ICON_BASE64}}" />
+<title>GymFlow</title>
+<style>
+@font-face {
+  font-family: 'LuckiestGuy';
+  src: url(data:font/ttf;base64,{{FONT_BASE64}}) format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: -webkit-fill-available;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  position: relative;
+}
+
+#bg {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-image: url(data:image/jpeg;base64,{{BG_BASE64}});
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  opacity: 0.15;
+  pointer-events: none;
+  z-index: 0;
+}
+
+#app { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px 0 14px;
+}
+
+.clock-box { display: flex; flex-direction: column; align-items: flex-start; }
+.clock-text { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 22px; color: #1c1c1e; font-variant-numeric: tabular-nums; }
+.clock-label { font-size: 11px; color: #8e8e93; font-weight: bold; margin-top: -2px; }
+
+.top-bar-buttons { display: flex; align-items: center; gap: 10px; }
+.icon-btn {
+  width: 42px; height: 42px; border-radius: 21px;
+  background: #f2f2f7; display: flex; align-items: center; justify-content: center;
+  font-size: 20px; border: none; font-weight: bold;
+}
+.icon-btn.muted { background: #ffe5e5; }
+
+.title {
+  font-family: 'LuckiestGuy'; font-weight: bold; font-size: 28px;
+  text-align: center; margin: 12px 0 4px 0; color: #1c1c1e;
+}
+
+.week-bar {
+  display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;
+}
+.week-range-text { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 14px; color: #1c1c1e; }
+.week-dates-text { font-size: 12px; color: #8e8e93; font-weight: bold; }
+.week-reset-text { font-size: 12px; color: #007aff; font-weight: bold; background: none; border: none; }
+
+.center-area { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; overflow: hidden; padding: 0 4px; gap: 4px; }
+
+.week-arrow {
+  flex: 0 0 auto;
+  width: 38px; height: 38px; border-radius: 19px;
+  background: rgba(0,0,0,0.35); color: #fff; font-size: 22px; font-weight: bold;
+  display: flex; align-items: center; justify-content: center; border: none;
+}
+
+.board-scroll { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; flex: 1 1 auto; min-width: 0; }
+.board { display: inline-block; }
+.row { display: flex; }
+
+.cell {
+  width: 44px; height: 46px;
+  display: flex; align-items: center; justify-content: center;
+  border: 0.5px solid #d0d0d5; text-align: center;
+  font-weight: bold;
+}
+.name-cell { width: 68px; background: #f2f2f7; }
+.name-text { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 12px; text-align: center; }
+.header-corner { width: 68px; background: #f2f2f7; }
+.header-cell { background: #f2f2f7; flex-direction: column; }
+.header-text { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 11px; }
+.header-date-text { font-size: 8px; color: #8e8e93; font-weight: bold; }
+
+.data-cell { background: #fafafa; cursor: pointer; }
+.data-cell.filled { background: #007aff; }
+.data-cell.completed { background: #34c759; }
+.data-cell.cancelled { background: #ff3b30; }
+.data-cell .txt { font-size: 10px; color: #999; font-weight: bold; white-space: pre-line; line-height: 1.1; }
+.data-cell.filled .txt, .data-cell.completed .txt { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 11px; color: #fff; white-space: pre-line; line-height: 1.1; }
+.data-cell.cancelled .txt { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 9px; color: #fff; white-space: pre-line; line-height: 1.1; }
+
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+  display: none; align-items: center; justify-content: center; z-index: 100;
+}
+.modal-overlay.open { display: flex; }
+.modal-card { background: #fff; border-radius: 14px; padding: 16px; width: 82%; max-width: 320px; }
+.modal-title { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 15px; text-align: center; margin-bottom: 12px; color: #555; }
+.cancelled-label { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 18px; color: #ff3b30; text-align: center; margin: 16px 0; }
+
+.time-select-row { display: flex; justify-content: center; align-items: center; gap: 8px; margin-bottom: 12px; }
+.time-select-row select { font-size: 24px; padding: 8px; border-radius: 8px; border: 1px solid #d0d0d5; font-weight: bold; background: #fff; }
+.time-select-row .colon { font-size: 24px; font-weight: bold; }
+
+.modal-buttons { display: flex; justify-content: space-between; margin-top: 8px; }
+.modal-buttons button { padding: 10px 8px; font-size: 15px; font-weight: bold; background: none; border: none; }
+.btn-text { color: #007aff; }
+.btn-primary { color: #007aff; }
+.btn-destructive { color: #ff3b30; }
+
+.toast {
+  position: fixed; left: 12px; right: 12px; bottom: 24px;
+  background: #1c1c1e; color: #fff; padding: 14px 16px; border-radius: 12px;
+  font-weight: bold; text-align: center; z-index: 200; display: none;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+}
+.toast.open { display: block; }
+
+.storage-warning {
+  background: #ff3b30; color: #fff; font-size: 12px; font-weight: bold;
+  text-align: center; padding: 6px 10px;
+}
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div id="app"></div>
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-card" id="modalCard"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+window.onerror = function (msg, src, line, col, err) {
+  var app = document.getElementById('app');
+  if (app) {
+    app.innerHTML = '<div style="padding:24px;font-family:sans-serif;color:#ff3b30;">' +
+      '<b>Something went wrong.</b><br/><br/>' +
+      String(msg) + '<br/>(line ' + line + ':' + col + ')' +
+      '</div>';
+  }
+  return false;
+};
+
+var NAMES = ['Ilias', 'Themis', 'Charis', 'Christos'];
+var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+var STORAGE_KEY = 'gymflow.schedule.v1';
+var NOTIF_MUTE_KEY = 'gymflow.notifMuted.v1';
+var ALARM_MUTE_KEY = 'gymflow.alarmMuted.v1';
+var FIRED_KEY = 'gymflow.fired.v1';
+
+function pad(n) { return String(n).padStart(2, '0'); }
+
+function cellKey(name, isoDate) { return name + '|' + isoDate; }
+
+// iOS Safari can throw a SecurityError touching window.localStorage from a
+// file:// page. Fall back to an in-memory store so the app still runs instead
+// of crashing silently — but track whether we actually have real persistence.
+var safeStorage = (function () {
+  var memory = {};
+  var persistent = false;
+  try {
+    var testKey = '__gymflow_test__';
+    window.localStorage.setItem(testKey, '1');
+    window.localStorage.removeItem(testKey);
+    persistent = true;
+  } catch (e) {
+    persistent = false;
+  }
+  return {
+    isPersistent: persistent,
+    getItem: function (key) {
+      if (persistent) {
+        try { return window.localStorage.getItem(key); } catch (e) { return memory[key] || null; }
+      }
+      return memory.hasOwnProperty(key) ? memory[key] : null;
+    },
+    setItem: function (key, val) {
+      if (persistent) {
+        try { window.localStorage.setItem(key, val); return; } catch (e) { /* fall through */ }
+      }
+      memory[key] = val;
+    },
+  };
+})();
+
+function loadSchedule() {
+  try {
+    var raw = safeStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    var parsed = JSON.parse(raw);
+    var out = {};
+    Object.keys(parsed).forEach(function (k) {
+      var v = parsed[k];
+      if (v && typeof v === 'object' && 'time' in v) {
+        out[k] = { time: v.time, cancelled: !!v.cancelled };
+      }
+    });
+    return out;
+  } catch (e) { return {}; }
+}
+
+function saveSchedule(schedule) {
+  safeStorage.setItem(STORAGE_KEY, JSON.stringify(schedule));
+}
+
+function loadFlag(key) { return safeStorage.getItem(key) === 'true'; }
+function saveFlag(key, val) { safeStorage.setItem(key, String(val)); }
+
+function loadFiredSet() {
+  try {
+    var raw = safeStorage.getItem(FIRED_KEY);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch (e) { return new Set(); }
+}
+function saveFiredSet(set) {
+  safeStorage.setItem(FIRED_KEY, JSON.stringify(Array.from(set)));
+}
+
+// -- Calendar helpers (Monday-start weeks) --
+function parseISODate(iso) {
+  var parts = iso.split('-').map(Number);
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+function formatISODate(date) {
+  return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
+}
+function addDays(date, days) {
+  var next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+function mondayOf(iso) {
+  var date = parseISODate(iso);
+  var dow = date.getDay();
+  var diffToMonday = (dow + 6) % 7;
+  return addDays(date, -diffToMonday);
+}
+function shortDateLabel(iso) {
+  var date = parseISODate(iso);
+  return pad(date.getDate()) + '/' + pad(date.getMonth() + 1);
+}
+
+// -- Athens time (offline-safe: uses the JS engine's built-in ICU tz data) --
+var athensTimeFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Athens', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+});
+var athensDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Athens', year: 'numeric', month: '2-digit', day: '2-digit',
+});
+function currentAthensTime() { return athensTimeFormatter.format(new Date()); }
+function currentAthensISODate() { return athensDateFormatter.format(new Date()); }
+
+function athensOffsetMinutes(guessUTCms) {
+  var d = new Date(guessUTCms);
+  var utc = new Date(d.toLocaleString('en-US', { timeZone: 'UTC' }));
+  var athens = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Athens' }));
+  return (athens.getTime() - utc.getTime()) / 60000;
+}
+function athensWallClockToInstant(isoDate, time) {
+  var dp = isoDate.split('-').map(Number);
+  var tp = time.split(':').map(Number);
+  var guessUTC = Date.UTC(dp[0], dp[1] - 1, dp[2], tp[0], tp[1]);
+  var offset = athensOffsetMinutes(guessUTC);
+  return new Date(guessUTC - offset * 60000);
+}
+
+function isCompleted(isoDate, time, todayISO, nowHHMM) {
+  if (isoDate < todayISO) return true;
+  if (isoDate > todayISO) return false;
+  return time <= nowHHMM;
+}
+
+// -- Beep (no audio file needed, generated in-browser) --
+var audioCtx = null;
+function beep(freq, durationMs) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.3, audioCtx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + durationMs / 1000);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + durationMs / 1000);
+  } catch (e) { /* audio not available */ }
+}
+function playReminderSound() { beep(880, 250); setTimeout(function () { beep(880, 250); }, 300); }
+function playAlarmSound() {
+  var i = 0;
+  var iv = setInterval(function () {
+    beep(660, 200);
+    i++;
+    if (i >= 6) clearInterval(iv);
+  }, 300);
+}
+
+function showToast(text) {
+  var toast = document.getElementById('toast');
+  toast.textContent = text;
+  toast.classList.add('open');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(function () { toast.classList.remove('open'); }, 6000);
+}
+
+// -- App state --
+var state = {
+  schedule: loadSchedule(),
+  notificationsMuted: loadFlag(NOTIF_MUTE_KEY),
+  alarmMuted: loadFlag(ALARM_MUTE_KEY),
+  weekOffset: 0,
+  activeCell: null, // { name, isoDate, dayLabel }
+  pickerHour: 9,
+  pickerMinute: 0,
+  todayISO: currentAthensISODate(),
+  nowHHMM: currentAthensTime().slice(0, 5),
+};
+
+function render() {
+  var app = document.getElementById('app');
+
+  var weekMonday = addDays(mondayOf(state.todayISO), state.weekOffset * 7);
+  var weekDates = DAY_LABELS.map(function (label, i) {
+    return { label: label, iso: formatISODate(addDays(weekMonday, i)) };
+  });
+  var weekRangeLabel = shortDateLabel(weekDates[0].iso) + ' – ' + shortDateLabel(weekDates[6].iso);
+  var weekTag = state.weekOffset === 0 ? 'This Week' : (state.weekOffset > 0 ? '+' + state.weekOffset + ' wk' : state.weekOffset + ' wk');
+
+  var html = '';
+  if (!safeStorage.isPersistent) {
+    html += '<div class="storage-warning">⚠️ Storage is blocked on this page — appointments will NOT be saved after you close the app.</div>';
+  }
+  html += '<div class="top-bar">';
+  html += '  <div class="clock-box"><div class="clock-text">' + currentAthensTime() + '</div><div class="clock-label">Athens</div></div>';
+  html += '  <div class="top-bar-buttons">';
+  html += '    <button class="icon-btn' + (state.notificationsMuted ? ' muted' : '') + '" id="btnNotif">' + (state.notificationsMuted ? '🔕' : '🔔') + '</button>';
+  html += '    <button class="icon-btn' + (state.alarmMuted ? ' muted' : '') + '" id="btnAlarm">' + (state.alarmMuted ? '⏰🚫' : '⏰') + '</button>';
+  html += '  </div>';
+  html += '</div>';
+
+  html += '<div class="title">GymFlow</div>';
+
+  html += '<div class="week-bar">';
+  html += '  <span class="week-range-text">' + weekTag + '</span>';
+  html += '  <span class="week-dates-text">' + weekRangeLabel + '</span>';
+  if (state.weekOffset !== 0) html += '  <button class="week-reset-text" id="btnToday">Today</button>';
+  html += '</div>';
+
+  html += '<div class="center-area">';
+  html += '  <button class="week-arrow" id="btnPrevWeek">‹</button>';
+  html += '  <div class="board-scroll"><div class="board">';
+
+  html += '    <div class="row"><div class="cell header-corner"></div>';
+  weekDates.forEach(function (d) {
+    html += '<div class="cell header-cell"><div class="header-text">' + d.label + '</div><div class="header-date-text">' + shortDateLabel(d.iso) + '</div></div>';
+  });
+  html += '</div>';
+
+  NAMES.forEach(function (name) {
+    html += '<div class="row"><div class="cell name-cell"><div class="name-text">' + name + '</div></div>';
+    weekDates.forEach(function (d) {
+      var entry = state.schedule[cellKey(name, d.iso)];
+      var completed = entry && !entry.cancelled && isCompleted(d.iso, entry.time, state.todayISO, state.nowHHMM);
+      var classes = 'cell data-cell';
+      if (entry && !entry.cancelled && !completed) classes += ' filled';
+      if (completed) classes += ' completed';
+      if (entry && entry.cancelled) classes += ' cancelled';
+      var text = '';
+      if (entry) text = entry.cancelled ? (entry.time + '\nCanceled') : entry.time;
+      html += '<div class="' + classes + '" data-name="' + name + '" data-iso="' + d.iso + '" data-day="' + d.label + '"><div class="txt">' + text + '</div></div>';
+    });
+    html += '</div>';
+  });
+
+  html += '  </div></div>';
+  html += '  <button class="week-arrow" id="btnNextWeek">›</button>';
+  html += '</div>';
+
+  app.innerHTML = html;
+
+  document.getElementById('btnNotif').onclick = function () {
+    state.notificationsMuted = !state.notificationsMuted;
+    saveFlag(NOTIF_MUTE_KEY, state.notificationsMuted);
+    render();
+  };
+  document.getElementById('btnAlarm').onclick = function () {
+    state.alarmMuted = !state.alarmMuted;
+    saveFlag(ALARM_MUTE_KEY, state.alarmMuted);
+    render();
+  };
+  document.getElementById('btnPrevWeek').onclick = function () { state.weekOffset--; render(); };
+  document.getElementById('btnNextWeek').onclick = function () { state.weekOffset++; render(); };
+  var btnToday = document.getElementById('btnToday');
+  if (btnToday) btnToday.onclick = function () { state.weekOffset = 0; render(); };
+
+  Array.prototype.forEach.call(document.querySelectorAll('.data-cell'), function (cellEl) {
+    cellEl.onclick = function () {
+      openPicker(cellEl.getAttribute('data-name'), cellEl.getAttribute('data-iso'), cellEl.getAttribute('data-day'));
+    };
+  });
+}
+
+function openPicker(name, isoDate, dayLabel) {
+  var entry = state.schedule[cellKey(name, isoDate)];
+  if (entry) {
+    var parts = entry.time.split(':').map(Number);
+    state.pickerHour = parts[0];
+    state.pickerMinute = parts[1];
+  } else {
+    state.pickerHour = 9;
+    state.pickerMinute = 0;
+  }
+  state.activeCell = { name: name, isoDate: isoDate, dayLabel: dayLabel };
+  renderModal();
+}
+
+function closePicker() {
+  state.activeCell = null;
+  document.getElementById('modalOverlay').classList.remove('open');
+}
+
+function renderModal() {
+  var overlay = document.getElementById('modalOverlay');
+  var card = document.getElementById('modalCard');
+  var ac = state.activeCell;
+  if (!ac) { overlay.classList.remove('open'); return; }
+
+  var entry = state.schedule[cellKey(ac.name, ac.isoDate)];
+  var html = '<div class="modal-title">' + ac.name + ' · ' + ac.dayLabel + ' ' + shortDateLabel(ac.isoDate) + '</div>';
+
+  if (entry && entry.cancelled) {
+    html += '<div class="cancelled-label">' + entry.time + ' Canceled</div>';
+    html += '<div class="modal-buttons">';
+    html += '  <button class="btn-destructive" id="btnClear">Clear</button>';
+    html += '  <button class="btn-text" id="btnClose">Close</button>';
+    html += '</div>';
+  } else {
+    html += '<div class="time-select-row">';
+    html += '  <select id="selHour">';
+    for (var h = 0; h < 24; h++) html += '<option value="' + h + '"' + (h === state.pickerHour ? ' selected' : '') + '>' + pad(h) + '</option>';
+    html += '  </select>';
+    html += '  <span class="colon">:</span>';
+    html += '  <select id="selMinute">';
+    for (var m = 0; m < 60; m++) html += '<option value="' + m + '"' + (m === state.pickerMinute ? ' selected' : '') + '>' + pad(m) + '</option>';
+    html += '  </select>';
+    html += '</div>';
+    html += '<div class="modal-buttons">';
+    if (entry) html += '  <button class="btn-destructive" id="btnCancelAppt">Cancel Appt.</button>';
+    html += '  <button class="btn-text" id="btnClose">Close</button>';
+    html += '  <button class="btn-primary" id="btnSave">Save</button>';
+    html += '</div>';
+  }
+
+  card.innerHTML = html;
+  overlay.classList.add('open');
+
+  var closeBtn = document.getElementById('btnClose');
+  if (closeBtn) closeBtn.onclick = closePicker;
+
+  var saveBtn = document.getElementById('btnSave');
+  if (saveBtn) {
+    saveBtn.onclick = function () {
+      var hour = parseInt(document.getElementById('selHour').value, 10);
+      var minute = parseInt(document.getElementById('selMinute').value, 10);
+      var key = cellKey(ac.name, ac.isoDate);
+      state.schedule[key] = { time: pad(hour) + ':' + pad(minute), cancelled: false };
+      saveSchedule(state.schedule);
+      closePicker();
+      render();
+    };
+  }
+
+  var cancelBtn = document.getElementById('btnCancelAppt');
+  if (cancelBtn) {
+    cancelBtn.onclick = function () {
+      var key = cellKey(ac.name, ac.isoDate);
+      if (state.schedule[key]) state.schedule[key].cancelled = true;
+      saveSchedule(state.schedule);
+      closePicker();
+      render();
+    };
+  }
+
+  var clearBtn = document.getElementById('btnClear');
+  if (clearBtn) {
+    clearBtn.onclick = function () {
+      var key = cellKey(ac.name, ac.isoDate);
+      delete state.schedule[key];
+      saveSchedule(state.schedule);
+      closePicker();
+      render();
+    };
+  }
+}
+
+document.getElementById('modalOverlay').onclick = function (e) {
+  if (e.target.id === 'modalOverlay') closePicker();
+};
+
+// -- In-app reminder/alarm loop --
+// NOTE: this can only fire while the app is actually open on screen. iOS does not
+// allow real background/lock-screen notifications for a page loaded from a local
+// file (file://) — that needs a proper https/local-network server, which this
+// version intentionally does not use.
+function checkReminders() {
+  var fired = loadFiredSet();
+  var now = Date.now();
+  var changed = false;
+
+  Object.keys(state.schedule).forEach(function (key) {
+    var entry = state.schedule[key];
+    if (!entry || entry.cancelled) return;
+    var parts = key.split('|');
+    var name = parts[0];
+    var isoDate = parts[1];
+    var target = athensWallClockToInstant(isoDate, entry.time).getTime();
+
+    var reminderId = key + '|reminder';
+    var alarmId = key + '|alarm';
+    var reminderAt = target - 10 * 60000;
+
+    if (!state.notificationsMuted && !fired.has(reminderId) && now >= reminderAt && now < target) {
+      fired.add(reminderId);
+      changed = true;
+      showToast(name + ' in 10 min — ' + entry.time);
+      playReminderSound();
+    }
+    if (!state.alarmMuted && !fired.has(alarmId) && now >= target && now < target + 60000) {
+      fired.add(alarmId);
+      changed = true;
+      showToast('⏰ ' + name + "'s appointment now (" + entry.time + ')');
+      playAlarmSound();
+    }
+  });
+
+  if (changed) saveFiredSet(fired);
+}
+
+setInterval(function () {
+  state.todayISO = currentAthensISODate();
+  state.nowHHMM = currentAthensTime().slice(0, 5);
+  checkReminders();
+  // Re-render the clock + any blue->green transitions without losing modal state.
+  if (!state.activeCell) render();
+  else {
+    var clockEl = document.querySelector('.clock-text');
+    if (clockEl) clockEl.textContent = currentAthensTime();
+  }
+}, 1000);
+
+if ('Notification' in window && Notification.permission === 'default') {
+  Notification.requestPermission().catch(function () {});
+}
+
+render();
+</script>
+</body>
+</html>
