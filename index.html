@@ -154,6 +154,10 @@ body {
   background: #ff3b30; color: #fff; font-size: 12px; font-weight: bold;
   text-align: center; padding: 6px 10px;
 }
+
+.build-version {
+  font-size: 9px; color: #c7c7cc; text-align: center; padding: 4px 0 2px 0;
+}
 </style>
 </head>
 <body>
@@ -180,6 +184,8 @@ window.onerror = function (msg, src, line, col, err) {
 
 var NAMES = ['Ilias', 'Themis', 'Charis', 'Christos'];
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+var BUILD_VERSION_LABEL = '1784324209090';
 
 var STORAGE_KEY = 'gymflow.schedule.v1';
 var NOTIF_MUTE_KEY = 'gymflow.notifMuted.v1';
@@ -418,6 +424,8 @@ function render() {
   html += '  <button class="week-arrow" id="btnNextWeek">›</button>';
   html += '</div>';
 
+  html += '<div class="build-version">build ' + BUILD_VERSION_LABEL + '</div>';
+
   app.innerHTML = html;
 
   document.getElementById('btnNotif').onclick = function () {
@@ -600,7 +608,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784323675762').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784324209090').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
