@@ -592,6 +592,31 @@ if ('Notification' in window && Notification.permission === 'default') {
 }
 
 render();
+
+// -- Service worker: makes reopening the installed app pick up new deploys
+// automatically instead of getting stuck on a stale cached copy. --
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js?v={{BUILD_VERSION}}').then(function (reg) {
+      reg.update();
+    }).catch(function () { /* ignore */ });
+
+    var refreshed = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (refreshed) return;
+      refreshed = true;
+      window.location.reload();
+    });
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.getRegistration().then(function (reg) {
+        if (reg) reg.update();
+      });
+    }
+  });
+}
 </script>
 </body>
 </html>
