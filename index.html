@@ -88,39 +88,40 @@ body {
 .week-dates-text { font-size: 12px; color: #8e8e93; font-weight: bold; }
 .week-reset-text { font-size: 12px; color: #007aff; font-weight: bold; background: none; border: none; }
 
-.center-area { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; overflow: hidden; padding: 0 2px; gap: 3px; }
+.center-area { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; overflow: hidden; padding: 0 1px; gap: 2px; }
 
 .week-arrow {
   flex: 0 0 auto;
-  width: 26px; height: 26px; border-radius: 13px;
-  background: rgba(0,0,0,0.35); color: #fff; font-size: 16px; font-weight: bold;
+  width: 22px; height: 22px; border-radius: 11px;
+  background: rgba(0,0,0,0.35); color: #fff; font-size: 13px; font-weight: bold;
   display: flex; align-items: center; justify-content: center; border: none;
 }
 
 .board-scroll { overflow: visible; max-width: 100%; flex: 0 0 auto; min-width: 0; }
-.board { display: inline-block; }
+.board { display: inline-block; border: 1.5px solid #b8b8bf; border-radius: 6px; overflow: hidden; }
 .row { display: flex; }
 
 .cell {
-  width: 34px; height: 42px;
+  width: 36px; height: 42px;
   display: flex; align-items: center; justify-content: center;
-  border: 0.5px solid #d0d0d5; text-align: center;
+  border: 1px solid #d0d0d5; text-align: center;
   font-weight: bold;
+  margin: -0.5px;
 }
-.name-cell { width: 46px; background: #f2f2f7; }
-.name-text { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 9px; text-align: center; }
-.header-corner { width: 46px; background: #f2f2f7; }
+.name-cell { width: 50px; background: #f2f2f7; }
+.name-text { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 11px; text-align: center; }
+.header-corner { width: 50px; background: #f2f2f7; }
 .header-cell { background: #f2f2f7; flex-direction: column; }
-.header-text { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 9px; }
-.header-date-text { font-size: 7px; color: #8e8e93; font-weight: bold; }
+.header-text { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 11px; }
+.header-date-text { font-size: 8px; color: #8e8e93; font-weight: bold; }
 
 .data-cell { background: #fafafa; cursor: pointer; }
 .data-cell.filled { background: #007aff; }
 .data-cell.completed { background: #34c759; }
 .data-cell.cancelled { background: #ff3b30; }
-.data-cell .txt { font-size: 8px; color: #999; font-weight: bold; white-space: pre-line; line-height: 1.05; }
-.data-cell.filled .txt, .data-cell.completed .txt { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 9px; color: #fff; white-space: pre-line; line-height: 1.05; }
-.data-cell.cancelled .txt { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 7px; color: #fff; white-space: pre-line; line-height: 1.05; }
+.data-cell .txt { font-size: 9px; color: #999; font-weight: bold; white-space: pre-line; line-height: 1.05; }
+.data-cell.filled .txt, .data-cell.completed .txt { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 10px; color: #fff; white-space: pre-line; line-height: 1.05; }
+.data-cell.cancelled .txt { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 8px; color: #fff; white-space: pre-line; line-height: 1.05; }
 
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.35);
@@ -597,7 +598,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784323276550').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784323535862').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
