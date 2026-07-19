@@ -566,6 +566,8 @@ var state = {
   paidAmounts: loadPaidAmounts(),
   paidModalName: null,
   paidModalMonthKey: null,
+  paidConfirmAction: null,
+  paidDraftAmount: null,
   notificationsMuted: loadFlag(NOTIF_MUTE_KEY),
   alarmMuted: loadFlag(ALARM_MUTE_KEY),
   activeTab: 'board', // 'board' | 'payouts' | 'members'
@@ -835,11 +837,15 @@ function wirePayoutsTab() {
 function openPaidModal(name, monthKey) {
   state.paidModalName = name;
   state.paidModalMonthKey = monthKey;
+  state.paidConfirmAction = null;
+  state.paidDraftAmount = null;
   renderPaidModal();
 }
 function closePaidModal() {
   state.paidModalName = null;
   state.paidModalMonthKey = null;
+  state.paidConfirmAction = null;
+  state.paidDraftAmount = null;
   document.getElementById('modalOverlay').classList.remove('open');
   render();
 }
@@ -857,35 +863,74 @@ function renderPaidModal() {
   var paidSoFar = state.paidAmounts[key] || 0;
   var remaining = Math.max(total - paidSoFar, 0);
 
-  var html = '<div class="modal-title">' + name + ' · Payment (' + monthLabel(monthKey) + ')</div>';
-  html += '<div style="text-align:center;font-size:13px;color:#555;margin:0 0 14px 0;line-height:1.5;">';
-  html += 'Total owed: <b>€' + formatMoney(total) + '</b><br/>';
-  if (paidSoFar > 0) html += 'Already paid: <b>€' + formatMoney(paidSoFar) + '</b><br/>';
-  html += 'Pay all the amount?';
-  html += '</div>';
-  html += '<div class="rate-input-row"><span class="rate-euro">€</span><input type="number" id="paidAmountInput" inputmode="decimal" step="0.5" min="0" value="' + formatMoney(remaining) + '" /></div>';
-  html += '<div class="modal-buttons"><button class="btn-text" id="btnPaidClose">Cancel</button><button class="btn-primary" id="btnPaidConfirm">Confirm</button></div>';
-  if (paidSoFar > 0) {
-    html += '<div style="text-align:center;margin-top:10px;"><button class="btn-text" id="btnPaidReset" style="font-size:12px;color:#ff3b30;">Reset payments for this month</button></div>';
+  var html;
+  if (state.paidConfirmAction === 'pay') {
+    html = '<div class="modal-title">Confirm Payment</div>';
+    html += '<div style="text-align:center;font-size:13px;color:#555;margin:0 0 16px 0;line-height:1.4;">Are you sure you want to record a payment of <b>€' + formatMoney(state.paidDraftAmount) + '</b> for <b>' + name + '</b> (' + monthLabel(monthKey) + ')?</div>';
+    html += '<div class="modal-buttons"><button class="btn-text" id="btnPaidConfirmCancel">Cancel</button><button class="btn-primary" id="btnPaidConfirmYes">Yes</button></div>';
+  } else if (state.paidConfirmAction === 'reset') {
+    html = '<div class="modal-title">Reset Payments?</div>';
+    html += '<div style="text-align:center;font-size:13px;color:#555;margin:0 0 16px 0;line-height:1.4;">Are you sure you want to reset all payments for <b>' + name + '</b> in <b>' + monthLabel(monthKey) + '</b>? The full amount will be owed again.</div>';
+    html += '<div class="modal-buttons"><button class="btn-text" id="btnPaidConfirmCancel">Cancel</button><button class="btn-destructive" id="btnPaidConfirmYes">Yes</button></div>';
+  } else {
+    var shownAmount = (state.paidDraftAmount !== null && state.paidDraftAmount !== undefined) ? state.paidDraftAmount : formatMoney(remaining);
+    html = '<div class="modal-title">' + name + ' · Payment (' + monthLabel(monthKey) + ')</div>';
+    html += '<div style="text-align:center;font-size:13px;color:#555;margin:0 0 14px 0;line-height:1.5;">';
+    html += 'Total owed: <b>€' + formatMoney(total) + '</b><br/>';
+    if (paidSoFar > 0) html += 'Already paid: <b>€' + formatMoney(paidSoFar) + '</b><br/>';
+    html += 'Pay all the amount?';
+    html += '</div>';
+    html += '<div class="rate-input-row"><span class="rate-euro">€</span><input type="number" id="paidAmountInput" inputmode="decimal" step="0.5" min="0" value="' + shownAmount + '" /></div>';
+    html += '<div class="modal-buttons"><button class="btn-text" id="btnPaidClose">Cancel</button><button class="btn-primary" id="btnPaidConfirm">Confirm</button></div>';
+    if (paidSoFar > 0) {
+      html += '<div style="text-align:center;margin-top:10px;"><button class="btn-text" id="btnPaidReset" style="font-size:12px;color:#ff3b30;">Reset payments for this month</button></div>';
+    }
   }
 
   card.innerHTML = html;
   overlay.classList.add('open');
 
+  if (state.paidConfirmAction === 'pay') {
+    document.getElementById('btnPaidConfirmCancel').onclick = function () {
+      state.paidConfirmAction = null;
+      renderPaidModal();
+    };
+    document.getElementById('btnPaidConfirmYes').onclick = function () {
+      state.paidAmounts[key] = paidSoFar + state.paidDraftAmount;
+      savePaidAmounts(state.paidAmounts);
+      state.paidConfirmAction = null;
+      state.paidDraftAmount = null;
+      closePaidModal();
+    };
+    return;
+  }
+  if (state.paidConfirmAction === 'reset') {
+    document.getElementById('btnPaidConfirmCancel').onclick = function () {
+      state.paidConfirmAction = null;
+      renderPaidModal();
+    };
+    document.getElementById('btnPaidConfirmYes').onclick = function () {
+      delete state.paidAmounts[key];
+      savePaidAmounts(state.paidAmounts);
+      state.paidConfirmAction = null;
+      closePaidModal();
+    };
+    return;
+  }
+
   document.getElementById('btnPaidClose').onclick = closePaidModal;
   document.getElementById('btnPaidConfirm').onclick = function () {
     var val = parseFloat(document.getElementById('paidAmountInput').value);
     if (isNaN(val) || val < 0) val = 0;
-    state.paidAmounts[key] = paidSoFar + val;
-    savePaidAmounts(state.paidAmounts);
-    closePaidModal();
+    state.paidDraftAmount = val;
+    state.paidConfirmAction = 'pay';
+    renderPaidModal();
   };
   var resetBtn = document.getElementById('btnPaidReset');
   if (resetBtn) {
     resetBtn.onclick = function () {
-      delete state.paidAmounts[key];
-      savePaidAmounts(state.paidAmounts);
-      closePaidModal();
+      state.paidConfirmAction = 'reset';
+      renderPaidModal();
     };
   }
 }
