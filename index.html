@@ -208,7 +208,7 @@ var NAMES = ['Ilias', 'Themis', 'Charis', 'Christos'];
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784436540097';
+var BUILD_VERSION_LABEL = '1784448717524';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
@@ -630,9 +630,15 @@ function render() {
   html += '<div class="title">GymFlow</div>';
 
   html += '<div class="tab-content">';
-  if (state.activeTab === 'board') html += renderBoardTab();
-  else if (state.activeTab === 'payouts') html += renderPayoutsTab();
-  else html += renderMembersTab();
+  var tabRenderFailed = false;
+  try {
+    if (state.activeTab === 'board') html += renderBoardTab();
+    else if (state.activeTab === 'payouts') html += renderPayoutsTab();
+    else html += renderMembersTab();
+  } catch (e) {
+    tabRenderFailed = true;
+    html += '<div style="padding:20px;color:#ff3b30;font-size:12px;font-weight:bold;">Couldn\'t show this tab.<br/><br/>' + (e && e.message ? e.message : String(e)) + '</div>';
+  }
   html += '</div>';
 
   html += '<div class="tab-bar">';
@@ -660,9 +666,16 @@ function render() {
     btn.onclick = function () { state.activeTab = btn.getAttribute('data-tab'); render(); };
   });
 
-  if (state.activeTab === 'board') wireBoardTab();
-  else if (state.activeTab === 'payouts') wirePayoutsTab();
-  else wireMembersTab();
+  if (!tabRenderFailed) {
+    try {
+      if (state.activeTab === 'board') wireBoardTab();
+      else if (state.activeTab === 'payouts') wirePayoutsTab();
+      else wireMembersTab();
+    } catch (e) {
+      var tc = document.querySelector('.tab-content');
+      if (tc) tc.innerHTML = '<div style="padding:20px;color:#ff3b30;font-size:12px;font-weight:bold;">Couldn\'t set up this tab.<br/><br/>' + (e && e.message ? e.message : String(e)) + '</div>';
+    }
+  }
 }
 
 function openRateModal(name) {
@@ -824,7 +837,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784436540097').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784448717524').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 

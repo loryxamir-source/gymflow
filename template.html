@@ -630,9 +630,15 @@ function render() {
   html += '<div class="title">GymFlow</div>';
 
   html += '<div class="tab-content">';
-  if (state.activeTab === 'board') html += renderBoardTab();
-  else if (state.activeTab === 'payouts') html += renderPayoutsTab();
-  else html += renderMembersTab();
+  var tabRenderFailed = false;
+  try {
+    if (state.activeTab === 'board') html += renderBoardTab();
+    else if (state.activeTab === 'payouts') html += renderPayoutsTab();
+    else html += renderMembersTab();
+  } catch (e) {
+    tabRenderFailed = true;
+    html += '<div style="padding:20px;color:#ff3b30;font-size:12px;font-weight:bold;">Couldn\'t show this tab.<br/><br/>' + (e && e.message ? e.message : String(e)) + '</div>';
+  }
   html += '</div>';
 
   html += '<div class="tab-bar">';
@@ -660,9 +666,16 @@ function render() {
     btn.onclick = function () { state.activeTab = btn.getAttribute('data-tab'); render(); };
   });
 
-  if (state.activeTab === 'board') wireBoardTab();
-  else if (state.activeTab === 'payouts') wirePayoutsTab();
-  else wireMembersTab();
+  if (!tabRenderFailed) {
+    try {
+      if (state.activeTab === 'board') wireBoardTab();
+      else if (state.activeTab === 'payouts') wirePayoutsTab();
+      else wireMembersTab();
+    } catch (e) {
+      var tc = document.querySelector('.tab-content');
+      if (tc) tc.innerHTML = '<div style="padding:20px;color:#ff3b30;font-size:12px;font-weight:bold;">Couldn\'t set up this tab.<br/><br/>' + (e && e.message ? e.message : String(e)) + '</div>';
+    }
+  }
 }
 
 function openRateModal(name) {
