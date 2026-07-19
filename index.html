@@ -255,7 +255,7 @@ var NAMES = ['Ilias', 'Themis', 'Charis', 'Christos'];
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784465722280';
+var BUILD_VERSION_LABEL = '1784465997684';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
@@ -487,6 +487,36 @@ function countAttendance(name, monthKey) {
 function formatMoney(n) {
   var s = n.toFixed(2);
   return s.replace(/\.00$/, '');
+}
+
+// -- Running balance (so an overpayment this month carries forward and
+// reduces what's owed next month, instead of just being discarded) --
+function monthKeysWithActivity(name, upToMonthKey) {
+  var keys = {};
+  Object.keys(state.attendance).forEach(function (k) {
+    if (!state.attendance[k]) return;
+    var parts = k.split('|');
+    if (parts[2] !== name) return;
+    var mk = monthKeyOf(parts[0]);
+    if (mk <= upToMonthKey) keys[mk] = true;
+  });
+  Object.keys(state.paidAmounts).forEach(function (k) {
+    var idx = k.lastIndexOf('|');
+    var pname = k.slice(0, idx), mk = k.slice(idx + 1);
+    if (pname !== name) return;
+    if (mk <= upToMonthKey) keys[mk] = true;
+  });
+  return Object.keys(keys).sort();
+}
+function computeBalance(name, upToMonthKey) {
+  var rate = state.rates[name] || 0;
+  var months = monthKeysWithActivity(name, upToMonthKey);
+  var totalOwed = 0, totalPaid = 0;
+  months.forEach(function (mk) {
+    totalOwed += countAttendance(name, mk) * rate;
+    totalPaid += state.paidAmounts[paidAmountKey(name, mk)] || 0;
+  });
+  return { totalOwed: totalOwed, totalPaid: totalPaid, remaining: Math.max(totalOwed - totalPaid, 0) };
 }
 
 // -- Athens time (offline-safe: uses the JS engine's built-in ICU tz data) --
@@ -802,15 +832,16 @@ function renderPayoutsTab() {
   NAMES.forEach(function (name) {
     var count = countAttendance(name, targetKey);
     var rate = state.rates[name] || 0;
-    var total = count * rate;
-    var paidSoFar = state.paidAmounts[paidAmountKey(name, targetKey)] || 0;
-    var remaining = Math.max(total - paidSoFar, 0);
-    var isFullyPaid = paidSoFar > 0 && remaining < 0.005;
+    var thisMonthPaid = state.paidAmounts[paidAmountKey(name, targetKey)] || 0;
+    // remaining is a running balance across all months up to this one, so an
+    // overpayment one month reduces what shows as owed the next month.
+    var balance = computeBalance(name, targetKey);
+    var isFullyPaid = balance.totalPaid > 0 && balance.remaining < 0.005;
 
     html += '<div class="stats-row payout-row">';
-    html += '  <div><div class="stats-month">' + name + '</div><div class="stats-tag">' + count + ' session' + (count === 1 ? '' : 's') + ' × €' + rate + (paidSoFar > 0 ? ' · €' + formatMoney(paidSoFar) + ' paid' : '') + '</div></div>';
+    html += '  <div><div class="stats-month">' + name + '</div><div class="stats-tag">' + count + ' session' + (count === 1 ? '' : 's') + ' × €' + rate + (thisMonthPaid > 0 ? ' · €' + formatMoney(thisMonthPaid) + ' paid' : '') + '</div></div>';
     html += '  <div class="payout-right">';
-    html += '    <div class="stats-count"><span class="cur">€</span>' + formatMoney(remaining) + '</div>';
+    html += '    <div class="stats-count"><span class="cur">€</span>' + formatMoney(balance.remaining) + '</div>';
     html += '    <button class="paid-btn' + (isFullyPaid ? ' paid' : '') + '" data-name="' + name + '">' + (isFullyPaid ? '✓ Paid' : 'Paid') + '</button>';
     html += '  </div>';
     html += '</div>';
@@ -856,12 +887,12 @@ function renderPaidModal() {
   if (!name) { overlay.classList.remove('open'); return; }
 
   var monthKey = state.paidModalMonthKey;
-  var count = countAttendance(name, monthKey);
-  var rate = state.rates[name] || 0;
-  var total = count * rate;
   var key = paidAmountKey(name, monthKey);
-  var paidSoFar = state.paidAmounts[key] || 0;
-  var remaining = Math.max(total - paidSoFar, 0);
+  var thisMonthPaid = state.paidAmounts[key] || 0;
+  // remaining is a running balance across all months up to this one, so an
+  // overpayment (e.g. owed €100, paid €150) leaves a €50 credit that reduces
+  // what shows as owed next month, instead of being discarded.
+  var balance = computeBalance(name, monthKey);
 
   var html;
   if (state.paidConfirmAction === 'pay') {
@@ -873,16 +904,16 @@ function renderPaidModal() {
     html += '<div style="text-align:center;font-size:13px;color:#555;margin:0 0 16px 0;line-height:1.4;">Are you sure you want to reset all payments for <b>' + name + '</b> in <b>' + monthLabel(monthKey) + '</b>? The full amount will be owed again.</div>';
     html += '<div class="modal-buttons"><button class="btn-text" id="btnPaidConfirmCancel">Cancel</button><button class="btn-destructive" id="btnPaidConfirmYes">Yes</button></div>';
   } else {
-    var shownAmount = (state.paidDraftAmount !== null && state.paidDraftAmount !== undefined) ? state.paidDraftAmount : formatMoney(remaining);
+    var shownAmount = (state.paidDraftAmount !== null && state.paidDraftAmount !== undefined) ? state.paidDraftAmount : formatMoney(balance.remaining);
     html = '<div class="modal-title">' + name + ' · Payment (' + monthLabel(monthKey) + ')</div>';
     html += '<div style="text-align:center;font-size:13px;color:#555;margin:0 0 14px 0;line-height:1.5;">';
-    html += 'Total owed: <b>€' + formatMoney(total) + '</b><br/>';
-    if (paidSoFar > 0) html += 'Already paid: <b>€' + formatMoney(paidSoFar) + '</b><br/>';
+    html += 'Total owed: <b>€' + formatMoney(balance.totalOwed) + '</b><br/>';
+    if (balance.totalPaid > 0) html += 'Already paid: <b>€' + formatMoney(balance.totalPaid) + '</b><br/>';
     html += 'Pay all the amount?';
     html += '</div>';
     html += '<div class="rate-input-row"><span class="rate-euro">€</span><input type="number" id="paidAmountInput" inputmode="decimal" step="0.5" min="0" value="' + shownAmount + '" /></div>';
     html += '<div class="modal-buttons"><button class="btn-text" id="btnPaidClose">Cancel</button><button class="btn-primary" id="btnPaidConfirm">Confirm</button></div>';
-    if (paidSoFar > 0) {
+    if (thisMonthPaid > 0) {
       html += '<div style="text-align:center;margin-top:10px;"><button class="btn-text" id="btnPaidReset" style="font-size:12px;color:#ff3b30;">Reset payments for this month</button></div>';
     }
   }
@@ -896,7 +927,7 @@ function renderPaidModal() {
       renderPaidModal();
     };
     document.getElementById('btnPaidConfirmYes').onclick = function () {
-      state.paidAmounts[key] = paidSoFar + state.paidDraftAmount;
+      state.paidAmounts[key] = thisMonthPaid + state.paidDraftAmount;
       savePaidAmounts(state.paidAmounts);
       state.paidConfirmAction = null;
       state.paidDraftAmount = null;
@@ -1274,7 +1305,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784465722280').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784465997684').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
