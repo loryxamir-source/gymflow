@@ -132,6 +132,7 @@ body {
 .slot-cell.filled { background: #007aff; color: #fff; }
 .slot-cell.completed { background: #34c759; color: #fff; }
 
+.member-toggle-list { max-height: 46vh; overflow-y: auto; -webkit-overflow-scrolling: touch; margin-bottom: 8px; }
 .member-toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 6px; border-bottom: 1px solid #eee; }
 .member-toggle-row:last-child { border-bottom: none; }
 .member-toggle-name { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 14px; color: #1c1c1e; }
@@ -266,7 +267,29 @@ window.onerror = function (msg, src, line, col, err) {
   return false;
 };
 
-var NAMES = ['Ilias', 'Themis', 'Charis', 'Christos'];
+var NAMES = [
+  'Χάρης (ΦΑΣΑΙΟΣ)',
+  'ΜΟΝΙΚΑ (Νεζα)',
+  'Γιώργος (ΒΙΚ)',
+  'Λένα',
+  'ΛΙΝΑ',
+  'ΜΑΡΙΑ (ΠΙΓΚΟΥΙΝΟ)',
+  'ΠΑΝΑΓΙΩΤΗΣ (ΦΙΛΟΣ ΜΕΛΕΤΗ)',
+  'Γιώργος (YENOO)',
+  'Γιώργος στουπακις (ΣΤΟΥΠ)',
+  'Φαιδρα (ΑΦΑΙΔΡΑ)',
+  'ΒΑΡΒΑΡΑ (ΒΑΡ)',
+  'Παντελάκης (ΠΑΝΤΕΛΗΗΗΗΣ)',
+  'Κωννα (σταγόνα)',
+  'Χάρης 2 (ΣΝΙΦΑΡΙΣΜΑ ΜΥΤΗΣ)',
+  'Ηλίας μάγειρας (SAILI)',
+  'Κώστας (DECIPHER)',
+  'Ηλίας (δράκουλιξ)',
+  'Θεμης (ΘΕΜ)',
+  'Εγώ (Λακτας)',
+  'Πατρίκ (πορκι)',
+  'Γιάννης ξάδελφος (ΞΑΔ)',
+];
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -678,6 +701,7 @@ function renderSlotCellModal() {
     html += '<div class="modal-buttons"><button class="btn-text" id="btnSlotCellCancelRemove">Cancel</button><button class="btn-destructive" id="btnSlotCellConfirmRemove">Remove</button></div>';
   } else {
     html = '<div class="modal-title">' + cell.dayLabel + ' ' + shortDateLabel(cell.isoDate) + ' · ' + cell.slot + '</div>';
+    html += '<div class="member-toggle-list">';
     NAMES.forEach(function (name) {
       var checked = !!state.slotCellDraft[name];
       var savedKey = attendKey(cell.isoDate, cell.slot, name);
@@ -698,6 +722,7 @@ function renderSlotCellModal() {
         html += '</div>';
       }
     });
+    html += '</div>';
     html += '<div class="modal-buttons"><button class="btn-text" id="btnSlotCellClose">Close</button><button class="btn-primary" id="btnSlotCellSave">Save</button></div>';
   }
 
