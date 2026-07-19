@@ -235,7 +235,7 @@ var NAMES = ['Ilias', 'Themis', 'Charis', 'Christos'];
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784454539965';
+var BUILD_VERSION_LABEL = '1784460444278';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
@@ -508,9 +508,12 @@ var state = {
   dayOffset: 0,
   payoutMonthOffset: 0,
   editingRateName: null,
+  rateDraftValue: null,
+  rateConfirmPending: false,
   slotsModalOpen: false,
   activeSlotCell: null,
   slotCellDraft: null,
+  slotCellConfirmName: null,
   newSlotHour: 9,
   newSlotMinute: 0,
   todayISO: currentAthensISODate(),
@@ -520,6 +523,7 @@ var state = {
 function openSlotCellModal(isoDate, slot, dayLabel) {
   state.activeSlotCell = { isoDate: isoDate, slot: slot, dayLabel: dayLabel };
   state.slotCellDraft = {};
+  state.slotCellConfirmName = null;
   NAMES.forEach(function (name) {
     state.slotCellDraft[name] = !!state.attendance[attendKey(isoDate, slot, name)];
   });
@@ -527,6 +531,7 @@ function openSlotCellModal(isoDate, slot, dayLabel) {
 }
 function closeSlotCellModal() {
   state.activeSlotCell = null;
+  state.slotCellConfirmName = null;
   document.getElementById('modalOverlay').classList.remove('open');
   render();
 }
@@ -536,25 +541,52 @@ function renderSlotCellModal() {
   var cell = state.activeSlotCell;
   if (!cell) { overlay.classList.remove('open'); return; }
 
-  var html = '<div class="modal-title">' + cell.dayLabel + ' ' + shortDateLabel(cell.isoDate) + ' · ' + cell.slot + '</div>';
-  NAMES.forEach(function (name) {
-    var checked = !!state.slotCellDraft[name];
-    html += '<div class="member-toggle-row" data-name="' + name + '">';
-    html += '  <span class="member-toggle-name">' + name + '</span>';
-    html += '  <span class="member-toggle-check">' + (checked ? '✓' : '') + '</span>';
-    html += '</div>';
-  });
-  html += '<div class="modal-buttons"><button class="btn-text" id="btnSlotCellClose">Close</button><button class="btn-primary" id="btnSlotCellSave">Save</button></div>';
+  var html;
+  if (state.slotCellConfirmName) {
+    var confirmName = state.slotCellConfirmName;
+    html = '<div class="modal-title">Remove ' + confirmName + '?</div>';
+    html += '<div style="text-align:center;font-size:13px;color:#555;margin:0 0 16px 0;line-height:1.4;">Are you sure you want to remove <b>' + confirmName + '</b> from <b>' + cell.slot + '</b> on <b>' + cell.dayLabel + ' ' + shortDateLabel(cell.isoDate) + '</b>?</div>';
+    html += '<div class="modal-buttons"><button class="btn-text" id="btnSlotCellCancelRemove">Cancel</button><button class="btn-destructive" id="btnSlotCellConfirmRemove">Remove</button></div>';
+  } else {
+    html = '<div class="modal-title">' + cell.dayLabel + ' ' + shortDateLabel(cell.isoDate) + ' · ' + cell.slot + '</div>';
+    NAMES.forEach(function (name) {
+      var checked = !!state.slotCellDraft[name];
+      html += '<div class="member-toggle-row" data-name="' + name + '">';
+      html += '  <span class="member-toggle-name">' + name + '</span>';
+      html += '  <span class="member-toggle-check">' + (checked ? '✓' : '') + '</span>';
+      html += '</div>';
+    });
+    html += '<div class="modal-buttons"><button class="btn-text" id="btnSlotCellClose">Close</button><button class="btn-primary" id="btnSlotCellSave">Save</button></div>';
+  }
 
   card.innerHTML = html;
   overlay.classList.add('open');
+
+  if (state.slotCellConfirmName) {
+    document.getElementById('btnSlotCellCancelRemove').onclick = function () {
+      state.slotCellConfirmName = null;
+      renderSlotCellModal();
+    };
+    document.getElementById('btnSlotCellConfirmRemove').onclick = function () {
+      state.slotCellDraft[state.slotCellConfirmName] = false;
+      state.slotCellConfirmName = null;
+      renderSlotCellModal();
+    };
+    return;
+  }
 
   document.getElementById('btnSlotCellClose').onclick = closeSlotCellModal;
   Array.prototype.forEach.call(document.querySelectorAll('.member-toggle-row'), function (rowEl) {
     rowEl.onclick = function () {
       var name = rowEl.getAttribute('data-name');
-      state.slotCellDraft[name] = !state.slotCellDraft[name];
-      renderSlotCellModal();
+      if (state.slotCellDraft[name]) {
+        // Unchecking someone who's currently booked — confirm before removing.
+        state.slotCellConfirmName = name;
+        renderSlotCellModal();
+      } else {
+        state.slotCellDraft[name] = true;
+        renderSlotCellModal();
+      }
     };
   });
   document.getElementById('btnSlotCellSave').onclick = function () {
@@ -821,10 +853,14 @@ function wirePullToRefresh() {
 
 function openRateModal(name) {
   state.editingRateName = name;
+  state.rateDraftValue = null;
+  state.rateConfirmPending = false;
   renderRateModal();
 }
 function closeRateModal() {
   state.editingRateName = null;
+  state.rateDraftValue = null;
+  state.rateConfirmPending = false;
   document.getElementById('modalOverlay').classList.remove('open');
   render();
 }
@@ -834,21 +870,43 @@ function renderRateModal() {
   var name = state.editingRateName;
   if (!name) { overlay.classList.remove('open'); return; }
 
-  var rate = state.rates[name] || 0;
-  var html = '<div class="modal-title">' + name + ' · Rate per Session</div>';
-  html += '<div class="rate-input-row"><span class="rate-euro">€</span><input type="number" id="rateInput" inputmode="decimal" step="0.5" min="0" value="' + rate + '" /></div>';
-  html += '<div class="modal-buttons"><button class="btn-text" id="btnRateClose">Close</button><button class="btn-primary" id="btnRateSave">Save</button></div>';
+  var currentRate = state.rates[name] || 0;
+  var html;
+
+  if (state.rateConfirmPending) {
+    html = '<div class="modal-title">Change ' + name + '\'s Price?</div>';
+    html += '<div style="text-align:center;font-size:13px;color:#555;margin:0 0 16px 0;line-height:1.4;">Are you sure you want to change <b>' + name + '</b>\'s price to <b>€' + state.rateDraftValue + '</b> per session?</div>';
+    html += '<div class="modal-buttons"><button class="btn-text" id="btnRateCancelChange">Cancel</button><button class="btn-primary" id="btnRateConfirmChange">Confirm</button></div>';
+  } else {
+    var shownValue = (state.rateDraftValue !== null && state.rateDraftValue !== undefined) ? state.rateDraftValue : currentRate;
+    html = '<div class="modal-title">' + name + ' · Rate per Session</div>';
+    html += '<div class="rate-input-row"><span class="rate-euro">€</span><input type="number" id="rateInput" inputmode="decimal" step="0.5" min="0" value="' + shownValue + '" /></div>';
+    html += '<div class="modal-buttons"><button class="btn-text" id="btnRateClose">Close</button><button class="btn-primary" id="btnRateSave">Save</button></div>';
+  }
 
   card.innerHTML = html;
   overlay.classList.add('open');
+
+  if (state.rateConfirmPending) {
+    document.getElementById('btnRateCancelChange').onclick = function () {
+      state.rateConfirmPending = false;
+      renderRateModal();
+    };
+    document.getElementById('btnRateConfirmChange').onclick = function () {
+      state.rates[name] = state.rateDraftValue;
+      saveRates(state.rates);
+      closeRateModal();
+    };
+    return;
+  }
 
   document.getElementById('btnRateClose').onclick = closeRateModal;
   document.getElementById('btnRateSave').onclick = function () {
     var val = parseFloat(document.getElementById('rateInput').value);
     if (isNaN(val) || val < 0) val = 0;
-    state.rates[name] = val;
-    saveRates(state.rates);
-    closeRateModal();
+    state.rateDraftValue = val;
+    state.rateConfirmPending = true;
+    renderRateModal();
   };
 }
 
@@ -979,7 +1037,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784454539965').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784460444278').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
