@@ -125,13 +125,17 @@ body {
 
 .slot-row { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid #eee; }
 .slot-time { width: 46px; font-family: 'LuckiestGuy'; font-weight: bold; font-size: 12px; color: #1c1c1e; flex: 0 0 auto; }
-.slot-chips { display: flex; gap: 6px; flex: 1; min-width: 0; }
-.chip {
-  flex: 1; min-width: 0; padding: 8px 2px; border-radius: 8px; background: #f2f2f7; border: none;
-  font-family: 'LuckiestGuy'; font-weight: bold; font-size: 10px; color: #8e8e93; text-align: center;
+.slot-cell {
+  flex: 1; min-width: 0; padding: 10px 8px; border-radius: 8px; background: #f2f2f7; border: none;
+  font-family: 'LuckiestGuy'; font-weight: bold; font-size: 11px; color: #8e8e93; text-align: center;
 }
-.chip.filled { background: #007aff; color: #fff; }
-.chip.completed { background: #34c759; color: #fff; }
+.slot-cell.filled { background: #007aff; color: #fff; }
+.slot-cell.completed { background: #34c759; color: #fff; }
+
+.member-toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 6px; border-bottom: 1px solid #eee; }
+.member-toggle-row:last-child { border-bottom: none; }
+.member-toggle-name { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 14px; color: #1c1c1e; }
+.member-toggle-check { font-size: 18px; font-weight: bold; color: #007aff; width: 24px; text-align: center; }
 
 .slots-manage-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px; border-bottom: 1px solid #eee; }
 .slots-manage-time { font-weight: bold; font-family: 'LuckiestGuy'; font-size: 13px; color: #1c1c1e; }
@@ -505,18 +509,63 @@ var state = {
   payoutMonthOffset: 0,
   editingRateName: null,
   slotsModalOpen: false,
+  activeSlotCell: null,
+  slotCellDraft: null,
   newSlotHour: 9,
   newSlotMinute: 0,
   todayISO: currentAthensISODate(),
   nowHHMM: currentAthensTime().slice(0, 5),
 };
 
-function toggleAttendance(isoDate, slot, name) {
-  var key = attendKey(isoDate, slot, name);
-  if (state.attendance[key]) delete state.attendance[key];
-  else state.attendance[key] = true;
-  saveAttendance(state.attendance);
+function openSlotCellModal(isoDate, slot, dayLabel) {
+  state.activeSlotCell = { isoDate: isoDate, slot: slot, dayLabel: dayLabel };
+  state.slotCellDraft = {};
+  NAMES.forEach(function (name) {
+    state.slotCellDraft[name] = !!state.attendance[attendKey(isoDate, slot, name)];
+  });
+  renderSlotCellModal();
+}
+function closeSlotCellModal() {
+  state.activeSlotCell = null;
+  document.getElementById('modalOverlay').classList.remove('open');
   render();
+}
+function renderSlotCellModal() {
+  var overlay = document.getElementById('modalOverlay');
+  var card = document.getElementById('modalCard');
+  var cell = state.activeSlotCell;
+  if (!cell) { overlay.classList.remove('open'); return; }
+
+  var html = '<div class="modal-title">' + cell.dayLabel + ' ' + shortDateLabel(cell.isoDate) + ' · ' + cell.slot + '</div>';
+  NAMES.forEach(function (name) {
+    var checked = !!state.slotCellDraft[name];
+    html += '<div class="member-toggle-row" data-name="' + name + '">';
+    html += '  <span class="member-toggle-name">' + name + '</span>';
+    html += '  <span class="member-toggle-check">' + (checked ? '✓' : '') + '</span>';
+    html += '</div>';
+  });
+  html += '<div class="modal-buttons"><button class="btn-text" id="btnSlotCellClose">Close</button><button class="btn-primary" id="btnSlotCellSave">Save</button></div>';
+
+  card.innerHTML = html;
+  overlay.classList.add('open');
+
+  document.getElementById('btnSlotCellClose').onclick = closeSlotCellModal;
+  Array.prototype.forEach.call(document.querySelectorAll('.member-toggle-row'), function (rowEl) {
+    rowEl.onclick = function () {
+      var name = rowEl.getAttribute('data-name');
+      state.slotCellDraft[name] = !state.slotCellDraft[name];
+      renderSlotCellModal();
+    };
+  });
+  document.getElementById('btnSlotCellSave').onclick = function () {
+    NAMES.forEach(function (name) {
+      var key = attendKey(cell.isoDate, cell.slot, name);
+      if (state.slotCellDraft[name]) state.attendance[key] = true;
+      else delete state.attendance[key];
+    });
+    saveAttendance(state.attendance);
+    closeSlotCellModal();
+  };
 }
 
 function tabButton(tab, icon, label) {
@@ -545,18 +594,16 @@ function renderBoardTab() {
     html += '<div style="text-align:center;color:#8e8e93;font-size:12px;padding:20px;">No time slots yet — tap "Manage Time Slots" to add one.</div>';
   }
   state.slots.forEach(function (slot) {
+    var bookedNames = NAMES.filter(function (name) { return !!state.attendance[attendKey(dayISO, slot, name)]; });
+    var completed = bookedNames.length > 0 && isCompleted(dayISO, slot, state.todayISO, state.nowHHMM);
+    var cls = 'slot-cell';
+    if (bookedNames.length > 0 && !completed) cls += ' filled';
+    if (completed) cls += ' completed';
+    var label = bookedNames.length ? bookedNames.join(', ') : '— tap to assign —';
+
     html += '<div class="slot-row">';
     html += '  <div class="slot-time">' + slot + '</div>';
-    html += '  <div class="slot-chips">';
-    NAMES.forEach(function (name) {
-      var checked = !!state.attendance[attendKey(dayISO, slot, name)];
-      var completed = checked && isCompleted(dayISO, slot, state.todayISO, state.nowHHMM);
-      var cls = 'chip';
-      if (checked && !completed) cls += ' filled';
-      if (completed) cls += ' completed';
-      html += '<button class="' + cls + '" data-day="' + dayISO + '" data-slot="' + slot + '" data-name="' + name + '">' + name + '</button>';
-    });
-    html += '  </div>';
+    html += '  <button class="' + cls + '" data-day="' + dayISO + '" data-slot="' + slot + '" data-daylabel="' + dayLabel + '">' + label + '</button>';
     html += '</div>';
   });
   html += '</div></div>';
@@ -571,9 +618,9 @@ function wireBoardTab() {
   if (btnToday) btnToday.onclick = function () { state.dayOffset = 0; render(); };
   document.getElementById('btnManageSlots').onclick = openSlotsModal;
 
-  Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (chipEl) {
-    chipEl.onclick = function () {
-      toggleAttendance(chipEl.getAttribute('data-day'), chipEl.getAttribute('data-slot'), chipEl.getAttribute('data-name'));
+  Array.prototype.forEach.call(document.querySelectorAll('.slot-cell'), function (cellEl) {
+    cellEl.onclick = function () {
+      openSlotCellModal(cellEl.getAttribute('data-day'), cellEl.getAttribute('data-slot'), cellEl.getAttribute('data-daylabel'));
     };
   });
 }
@@ -870,6 +917,7 @@ document.getElementById('modalOverlay').onclick = function (e) {
   if (e.target.id !== 'modalOverlay') return;
   if (state.editingRateName) closeRateModal();
   if (state.slotsModalOpen) closeSlotsModal();
+  if (state.activeSlotCell) closeSlotCellModal();
 };
 
 // -- In-app reminder/alarm loop --
