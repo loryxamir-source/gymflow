@@ -100,8 +100,14 @@ body {
 .edit-slots-btn-row { display: flex; justify-content: center; margin-bottom: 6px; }
 .edit-slots-btn { font-size: 12px; color: #007aff; font-weight: bold; background: none; border: none; }
 
+/* iOS Safari (even outside the installed PWA) fails to make an overflow-y:auto
+   flex child scrollable if its height comes purely from flex-grow — it needs a
+   concretely-sized box. Absolute-position the scrollable list inside a
+   position:relative flex:1 wrapper instead of relying on flex sizing alone. */
+.list-wrap { flex: 1; position: relative; overflow: hidden; width: 100%; min-height: 0; }
 .slot-list, .payouts-list, .members-list {
-  flex: 1; overflow-y: auto; width: 100%; padding: 0 12px 10px 12px; -webkit-overflow-scrolling: touch; min-height: 0;
+  position: absolute; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  width: 100%; padding: 0 12px 10px 12px;
 }
 
 .slot-row { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid #eee; }
@@ -202,7 +208,7 @@ var NAMES = ['Ilias', 'Themis', 'Charis', 'Christos'];
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784430073987';
+var BUILD_VERSION_LABEL = '1784436540097';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
@@ -507,7 +513,7 @@ function renderBoardTab() {
 
   html += '<div class="edit-slots-btn-row"><button class="edit-slots-btn" id="btnManageSlots">✎ Manage Time Slots</button></div>';
 
-  html += '<div class="slot-list">';
+  html += '<div class="list-wrap"><div class="slot-list">';
   if (state.slots.length === 0) {
     html += '<div style="text-align:center;color:#8e8e93;font-size:12px;padding:20px;">No time slots yet — tap "Manage Time Slots" to add one.</div>';
   }
@@ -526,7 +532,7 @@ function renderBoardTab() {
     html += '  </div>';
     html += '</div>';
   });
-  html += '</div>';
+  html += '</div></div>';
 
   return html;
 }
@@ -565,7 +571,7 @@ function renderPayoutsTab() {
   if (state.payoutMonthOffset !== 0) html += '  <button class="week-reset-text" id="btnThisMonth">This Month</button>';
   html += '</div>';
 
-  html += '<div class="payouts-list">';
+  html += '<div class="list-wrap"><div class="payouts-list">';
   NAMES.forEach(function (name) {
     var count = countAttendance(name, targetKey);
     var rate = state.rates[name] || 0;
@@ -575,7 +581,7 @@ function renderPayoutsTab() {
     html += '  <div class="stats-count"><span class="cur">€</span>' + formatMoney(total) + '</div>';
     html += '</div>';
   });
-  html += '</div>';
+  html += '</div></div>';
 
   return html;
 }
@@ -588,7 +594,7 @@ function wirePayoutsTab() {
 }
 
 function renderMembersTab() {
-  var html = '<div class="members-list">';
+  var html = '<div class="list-wrap"><div class="members-list">';
   NAMES.forEach(function (name) {
     var rate = state.rates[name] || 0;
     html += '<div class="stats-row member-row" data-name="' + name + '">';
@@ -596,7 +602,7 @@ function renderMembersTab() {
     html += '  <div class="stats-count"><span class="cur">€</span>' + rate + '</div>';
     html += '</div>';
   });
-  html += '</div>';
+  html += '</div></div>';
   return html;
 }
 
@@ -818,7 +824,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784430073987').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784436540097').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
