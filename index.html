@@ -176,6 +176,13 @@ body {
 .stats-count { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 18px; color: #007aff; }
 .stats-count .cur { font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
 
+.payout-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.paid-btn {
+  font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 12px; border: none;
+  background: #f2f2f7; color: #007aff;
+}
+.paid-btn.paid { background: #34c759; color: #fff; }
+
 .rate-input-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 14px; }
 .rate-input-row input { font-size: 22px; padding: 8px; border-radius: 8px; border: 1px solid #d0d0d5; font-weight: bold; width: 100px; text-align: center; }
 .rate-euro { font-size: 22px; font-weight: bold; }
@@ -248,12 +255,13 @@ var NAMES = ['Ilias', 'Themis', 'Charis', 'Christos'];
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784464791834';
+var BUILD_VERSION_LABEL = '1784465240692';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
 var RATES_KEY = 'gymflow.rates.v1';
 var NOTES_KEY = 'gymflow.notes.v1';
+var PAID_KEY = 'gymflow.paid.v1';
 var SLOTS_KEY = 'gymflow.slots.v3'; // bumped so the new 05:00-23:30 default range applies even for existing installs
 var NOTIF_MUTE_KEY = 'gymflow.notifMuted.v1';
 var ALARM_MUTE_KEY = 'gymflow.alarmMuted.v1';
@@ -355,6 +363,21 @@ function loadNotes() {
   return {};
 }
 function saveNotes(notes) { safeStorage.setItem(NOTES_KEY, JSON.stringify(notes)); }
+
+// -- Paid tracking (name|monthKey -> true), marks a person's owed amount for
+// that month as settled. Toggle-able so a mistaken tap can be undone. --
+function paidKey(name, monthKey) { return name + '|' + monthKey; }
+function loadPaid() {
+  try {
+    var raw = safeStorage.getItem(PAID_KEY);
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch (e) { /* fall through */ }
+  return {};
+}
+function savePaid(paid) { safeStorage.setItem(PAID_KEY, JSON.stringify(paid)); }
 
 function escapeHtml(str) {
   return String(str)
@@ -540,6 +563,7 @@ var state = {
   attendance: loadAttendance(initialSlots),
   rates: loadRates(),
   notes: loadNotes(),
+  paid: loadPaid(),
   notificationsMuted: loadFlag(NOTIF_MUTE_KEY),
   alarmMuted: loadFlag(ALARM_MUTE_KEY),
   activeTab: 'board', // 'board' | 'payouts' | 'members'
@@ -774,10 +798,15 @@ function renderPayoutsTab() {
   NAMES.forEach(function (name) {
     var count = countAttendance(name, targetKey);
     var rate = state.rates[name] || 0;
-    var total = count * rate;
-    html += '<div class="stats-row">';
+    var isPaid = !!state.paid[paidKey(name, targetKey)];
+    var total = isPaid ? 0 : count * rate;
+
+    html += '<div class="stats-row payout-row">';
     html += '  <div><div class="stats-month">' + name + '</div><div class="stats-tag">' + count + ' session' + (count === 1 ? '' : 's') + ' × €' + rate + '</div></div>';
-    html += '  <div class="stats-count"><span class="cur">€</span>' + formatMoney(total) + '</div>';
+    html += '  <div class="payout-right">';
+    html += '    <div class="stats-count"><span class="cur">€</span>' + formatMoney(total) + '</div>';
+    html += '    <button class="paid-btn' + (isPaid ? ' paid' : '') + '" data-name="' + name + '">' + (isPaid ? '✓ Paid' : 'Paid') + '</button>';
+    html += '  </div>';
     html += '</div>';
   });
   html += '</div></div>';
@@ -790,6 +819,18 @@ function wirePayoutsTab() {
   document.getElementById('btnNextMonth').onclick = function () { state.payoutMonthOffset++; render(); };
   var btnThisMonth = document.getElementById('btnThisMonth');
   if (btnThisMonth) btnThisMonth.onclick = function () { state.payoutMonthOffset = 0; render(); };
+
+  var targetKey = payoutMonthKeyForOffset(state.payoutMonthOffset);
+  Array.prototype.forEach.call(document.querySelectorAll('.paid-btn'), function (btn) {
+    btn.onclick = function () {
+      var name = btn.getAttribute('data-name');
+      var key = paidKey(name, targetKey);
+      if (state.paid[key]) delete state.paid[key];
+      else state.paid[key] = true;
+      savePaid(state.paid);
+      render();
+    };
+  });
 }
 
 function renderMembersTab() {
@@ -1130,7 +1171,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784464791834').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784465240692').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
