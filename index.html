@@ -231,12 +231,12 @@ var NAMES = ['Ilias', 'Themis', 'Charis', 'Christos'];
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784450550410';
+var BUILD_VERSION_LABEL = '1784453949339';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
 var RATES_KEY = 'gymflow.rates.v1';
-var SLOTS_KEY = 'gymflow.slots.v1';
+var SLOTS_KEY = 'gymflow.slots.v2'; // bumped so the new 05:00-11:30 default range applies even for existing installs
 var NOTIF_MUTE_KEY = 'gymflow.notifMuted.v1';
 var ALARM_MUTE_KEY = 'gymflow.alarmMuted.v1';
 var FIRED_KEY = 'gymflow.fired.v1';
@@ -292,11 +292,11 @@ function saveFiredSet(set) {
 // -- Time slots (fixed, editable list shared across all days) --
 function defaultSlots() {
   var out = [];
-  for (var h = 8; h <= 21; h++) {
+  for (var h = 5; h <= 11; h++) {
     out.push(pad(h) + ':00');
     out.push(pad(h) + ':30');
   }
-  return out;
+  return out; // 05:00 ... 11:30
 }
 function saveSlots(slots) { safeStorage.setItem(SLOTS_KEY, JSON.stringify(slots)); }
 function loadSlots() {
@@ -410,8 +410,12 @@ function countAttendance(name, monthKey) {
   Object.keys(state.attendance).forEach(function (key) {
     if (!state.attendance[key]) return;
     var parts = key.split('|');
+    var isoDate = parts[0], slot = parts[1];
     if (parts[2] !== name) return;
-    if (monthKeyOf(parts[0]) !== monthKey) return;
+    if (monthKeyOf(isoDate) !== monthKey) return;
+    // Only sessions that have already happened count toward payouts — a slot
+    // booked for later today or a future date isn't owed yet.
+    if (!isCompleted(isoDate, slot, state.todayISO, state.nowHHMM)) return;
     count++;
   });
   return count;
@@ -927,7 +931,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784450550410').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784453949339').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
