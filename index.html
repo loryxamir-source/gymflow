@@ -36,8 +36,14 @@ html, body {
 body {
   display: flex;
   flex-direction: column;
+  /* 100vh / -webkit-fill-available are unreliable on real mobile Safari (can
+     resolve to 0 or the wrong value depending on device/OS), which cascades
+     into every flex/overflow child below never getting real height. --app-vh
+     is set from JS using the actual measured window.innerHeight and always
+     wins when supported, sidestepping the ambiguity entirely. */
   height: 100vh;
   height: -webkit-fill-available;
+  height: var(--app-vh, 100vh);
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
   position: relative;
@@ -193,6 +199,16 @@ body {
 <script>
 'use strict';
 
+// 100vh/-webkit-fill-available is unreliable on real mobile Safari — measure the
+// actual viewport height in JS and feed it in as a CSS var instead of trusting
+// CSS viewport units, which can collapse the whole flex/overflow chain below.
+function setAppViewportHeight() {
+  document.documentElement.style.setProperty('--app-vh', window.innerHeight + 'px');
+}
+setAppViewportHeight();
+window.addEventListener('resize', setAppViewportHeight);
+window.addEventListener('orientationchange', function () { setTimeout(setAppViewportHeight, 100); });
+
 window.onerror = function (msg, src, line, col, err) {
   var app = document.getElementById('app');
   if (app) {
@@ -208,7 +224,7 @@ var NAMES = ['Ilias', 'Themis', 'Charis', 'Christos'];
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784448717524';
+var BUILD_VERSION_LABEL = '1784449216798';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
@@ -837,7 +853,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784448717524').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784449216798').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
