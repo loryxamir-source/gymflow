@@ -137,6 +137,19 @@ body {
 .member-toggle-name { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 14px; color: #1c1c1e; }
 .member-toggle-check { font-size: 18px; font-weight: bold; color: #007aff; width: 24px; text-align: center; }
 
+.member-note-row {
+  display: flex; align-items: center; gap: 6px; padding: 2px 6px 10px 6px; margin-top: -6px;
+  border-bottom: 1px solid #eee; cursor: pointer;
+}
+.member-note-row:last-child { border-bottom: none; }
+.member-note-icon { font-size: 12px; }
+.member-note-text { font-size: 11px; color: #8e8e93; font-weight: bold; flex: 1; text-align: left; }
+
+.note-textarea {
+  width: 100%; min-height: 80px; border: 1px solid #d0d0d5; border-radius: 8px; padding: 8px;
+  font-size: 14px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin-bottom: 12px; resize: vertical;
+}
+
 .slots-manage-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px; border-bottom: 1px solid #eee; }
 .slots-manage-time { font-weight: bold; font-family: 'LuckiestGuy'; font-size: 13px; color: #1c1c1e; }
 .slots-remove-btn { color: #ff3b30; font-weight: bold; background: none; border: none; font-size: 18px; }
@@ -235,11 +248,12 @@ var NAMES = ['Ilias', 'Themis', 'Charis', 'Christos'];
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784460444278';
+var BUILD_VERSION_LABEL = '1784464791834';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
 var RATES_KEY = 'gymflow.rates.v1';
+var NOTES_KEY = 'gymflow.notes.v1';
 var SLOTS_KEY = 'gymflow.slots.v3'; // bumped so the new 05:00-23:30 default range applies even for existing installs
 var NOTIF_MUTE_KEY = 'gymflow.notifMuted.v1';
 var ALARM_MUTE_KEY = 'gymflow.alarmMuted.v1';
@@ -327,6 +341,29 @@ function loadRates() {
   return rates;
 }
 function saveRates(rates) { safeStorage.setItem(RATES_KEY, JSON.stringify(rates)); }
+
+// -- Notes (isoDate|slot|name -> short comment text, only meaningful when that
+// appointment is actually booked) --
+function loadNotes() {
+  try {
+    var raw = safeStorage.getItem(NOTES_KEY);
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch (e) { /* fall through */ }
+  return {};
+}
+function saveNotes(notes) { safeStorage.setItem(NOTES_KEY, JSON.stringify(notes)); }
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 // -- Attendance (isoDate|slot|name -> true), with one-time migration from the
 // old per-name-per-day free-time model so existing bookings aren't lost. --
@@ -502,6 +539,7 @@ var state = {
   slots: initialSlots,
   attendance: loadAttendance(initialSlots),
   rates: loadRates(),
+  notes: loadNotes(),
   notificationsMuted: loadFlag(NOTIF_MUTE_KEY),
   alarmMuted: loadFlag(ALARM_MUTE_KEY),
   activeTab: 'board', // 'board' | 'payouts' | 'members'
@@ -514,6 +552,8 @@ var state = {
   activeSlotCell: null,
   slotCellDraft: null,
   slotCellConfirmName: null,
+  noteEditKey: null,
+  noteEditText: '',
   newSlotHour: 9,
   newSlotMinute: 0,
   todayISO: currentAthensISODate(),
@@ -532,8 +572,19 @@ function openSlotCellModal(isoDate, slot, dayLabel) {
 function closeSlotCellModal() {
   state.activeSlotCell = null;
   state.slotCellConfirmName = null;
+  state.noteEditKey = null;
   document.getElementById('modalOverlay').classList.remove('open');
   render();
+}
+function openNoteEditor(isoDate, slot, name) {
+  state.noteEditKey = { isoDate: isoDate, slot: slot, name: name };
+  state.noteEditText = state.notes[attendKey(isoDate, slot, name)] || '';
+  renderSlotCellModal();
+}
+function closeNoteEditor() {
+  state.noteEditKey = null;
+  state.noteEditText = '';
+  renderSlotCellModal();
 }
 function renderSlotCellModal() {
   var overlay = document.getElementById('modalOverlay');
@@ -542,7 +593,12 @@ function renderSlotCellModal() {
   if (!cell) { overlay.classList.remove('open'); return; }
 
   var html;
-  if (state.slotCellConfirmName) {
+  if (state.noteEditKey) {
+    var nk = state.noteEditKey;
+    html = '<div class="modal-title">' + nk.name + ' · ' + nk.slot + ' Comment</div>';
+    html += '<textarea id="noteTextarea" class="note-textarea" placeholder="e.g. He told me he\'ll come at 4:15">' + escapeHtml(state.noteEditText) + '</textarea>';
+    html += '<div class="modal-buttons"><button class="btn-text" id="btnNoteCancel">Cancel</button><button class="btn-primary" id="btnNoteSave">Save</button></div>';
+  } else if (state.slotCellConfirmName) {
     var confirmName = state.slotCellConfirmName;
     html = '<div class="modal-title">Remove ' + confirmName + '?</div>';
     html += '<div style="text-align:center;font-size:13px;color:#555;margin:0 0 16px 0;line-height:1.4;">Are you sure you want to remove <b>' + confirmName + '</b> from <b>' + cell.slot + '</b> on <b>' + cell.dayLabel + ' ' + shortDateLabel(cell.isoDate) + '</b>?</div>';
@@ -551,16 +607,43 @@ function renderSlotCellModal() {
     html = '<div class="modal-title">' + cell.dayLabel + ' ' + shortDateLabel(cell.isoDate) + ' · ' + cell.slot + '</div>';
     NAMES.forEach(function (name) {
       var checked = !!state.slotCellDraft[name];
+      var savedKey = attendKey(cell.isoDate, cell.slot, name);
+      var isActualAppointment = !!state.attendance[savedKey];
+      var note = state.notes[savedKey];
+
       html += '<div class="member-toggle-row" data-name="' + name + '">';
       html += '  <span class="member-toggle-name">' + name + '</span>';
       html += '  <span class="member-toggle-check">' + (checked ? '✓' : '') + '</span>';
       html += '</div>';
+
+      // A comment only makes sense for an appointment that's actually booked
+      // (saved), not just a checkbox toggled in this not-yet-saved draft.
+      if (isActualAppointment) {
+        html += '<div class="member-note-row" data-name="' + name + '">';
+        html += '  <span class="member-note-icon">💬</span>';
+        html += '  <span class="member-note-text">' + (note ? escapeHtml(note) : 'Add Comment') + '</span>';
+        html += '</div>';
+      }
     });
     html += '<div class="modal-buttons"><button class="btn-text" id="btnSlotCellClose">Close</button><button class="btn-primary" id="btnSlotCellSave">Save</button></div>';
   }
 
   card.innerHTML = html;
   overlay.classList.add('open');
+
+  if (state.noteEditKey) {
+    document.getElementById('btnNoteCancel').onclick = closeNoteEditor;
+    document.getElementById('btnNoteSave').onclick = function () {
+      var nk2 = state.noteEditKey;
+      var key = attendKey(nk2.isoDate, nk2.slot, nk2.name);
+      var text = document.getElementById('noteTextarea').value.trim();
+      if (text) state.notes[key] = text;
+      else delete state.notes[key];
+      saveNotes(state.notes);
+      closeNoteEditor();
+    };
+    return;
+  }
 
   if (state.slotCellConfirmName) {
     document.getElementById('btnSlotCellCancelRemove').onclick = function () {
@@ -589,11 +672,20 @@ function renderSlotCellModal() {
       }
     };
   });
+  Array.prototype.forEach.call(document.querySelectorAll('.member-note-row'), function (rowEl) {
+    rowEl.onclick = function () {
+      openNoteEditor(cell.isoDate, cell.slot, rowEl.getAttribute('data-name'));
+    };
+  });
   document.getElementById('btnSlotCellSave').onclick = function () {
     NAMES.forEach(function (name) {
       var key = attendKey(cell.isoDate, cell.slot, name);
-      if (state.slotCellDraft[name]) state.attendance[key] = true;
-      else delete state.attendance[key];
+      if (state.slotCellDraft[name]) {
+        state.attendance[key] = true;
+      } else {
+        delete state.attendance[key];
+        if (state.notes[key]) { delete state.notes[key]; saveNotes(state.notes); }
+      }
     });
     saveAttendance(state.attendance);
     closeSlotCellModal();
@@ -631,7 +723,8 @@ function renderBoardTab() {
     var cls = 'slot-cell';
     if (bookedNames.length > 0 && !completed) cls += ' filled';
     if (completed) cls += ' completed';
-    var label = bookedNames.length ? bookedNames.join(', ') : '— tap to assign —';
+    var hasNote = bookedNames.some(function (name) { return !!state.notes[attendKey(dayISO, slot, name)]; });
+    var label = bookedNames.length ? (bookedNames.join(', ') + (hasNote ? ' 💬' : '')) : '— tap to assign —';
 
     html += '<div class="slot-row">';
     html += '  <div class="slot-time">' + slot + '</div>';
@@ -1037,7 +1130,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784460444278').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784464791834').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
