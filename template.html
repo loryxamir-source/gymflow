@@ -29,6 +29,7 @@ html, body {
   padding: 0;
   height: 100%;
   overflow: hidden;
+  overscroll-behavior: none;
   background: #ffffff;
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 }
@@ -113,6 +114,7 @@ body {
 .list-wrap { flex: 1; position: relative; overflow: hidden; width: 100%; min-height: 0; }
 .slot-list, .payouts-list, .members-list {
   position: absolute; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   width: 100%; padding: 0 12px 10px 12px;
 }
 
