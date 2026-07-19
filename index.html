@@ -226,7 +226,7 @@ var NAMES = ['Ilias', 'Themis', 'Charis', 'Christos'];
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784449766399';
+var BUILD_VERSION_LABEL = '1784450129340';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
@@ -630,8 +630,17 @@ function wireMembersTab() {
   });
 }
 
+var lastRenderedTab = null;
+var SCROLLABLE_LIST_SELECTOR = '.slot-list, .payouts-list, .members-list';
+
 function render() {
   var app = document.getElementById('app');
+
+  // The 1-second clock/reminder tick calls render() constantly, which rebuilds
+  // the whole tab from scratch — without this, that wipes the user's scroll
+  // position back to the top every second while they're mid-scroll.
+  var prevScrollEl = document.querySelector(SCROLLABLE_LIST_SELECTOR);
+  var prevScrollTop = (prevScrollEl && lastRenderedTab === state.activeTab) ? prevScrollEl.scrollTop : 0;
 
   var html = '';
   if (!safeStorage.isPersistent) {
@@ -668,6 +677,12 @@ function render() {
   html += '<div class="build-version">build ' + BUILD_VERSION_LABEL + '</div>';
 
   app.innerHTML = html;
+  lastRenderedTab = state.activeTab;
+
+  if (prevScrollTop) {
+    var newScrollEl = document.querySelector(SCROLLABLE_LIST_SELECTOR);
+    if (newScrollEl) newScrollEl.scrollTop = prevScrollTop;
+  }
 
   document.getElementById('btnNotif').onclick = function () {
     state.notificationsMuted = !state.notificationsMuted;
@@ -855,7 +870,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784449766399').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784450129340').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
