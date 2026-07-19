@@ -261,7 +261,7 @@ var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, 
 var ATTEND_KEY = 'gymflow.attendance.v2';
 var RATES_KEY = 'gymflow.rates.v1';
 var NOTES_KEY = 'gymflow.notes.v1';
-var PAID_KEY = 'gymflow.paid.v1';
+var PAID_AMOUNTS_KEY = 'gymflow.paidAmounts.v1';
 var SLOTS_KEY = 'gymflow.slots.v3'; // bumped so the new 05:00-23:30 default range applies even for existing installs
 var NOTIF_MUTE_KEY = 'gymflow.notifMuted.v1';
 var ALARM_MUTE_KEY = 'gymflow.alarmMuted.v1';
@@ -364,12 +364,12 @@ function loadNotes() {
 }
 function saveNotes(notes) { safeStorage.setItem(NOTES_KEY, JSON.stringify(notes)); }
 
-// -- Paid tracking (name|monthKey -> true), marks a person's owed amount for
-// that month as settled. Toggle-able so a mistaken tap can be undone. --
-function paidKey(name, monthKey) { return name + '|' + monthKey; }
-function loadPaid() {
+// -- Paid tracking (name|monthKey -> cumulative €amount paid so far). Supports
+// partial payments: remaining = (sessions x rate) - amount paid. --
+function paidAmountKey(name, monthKey) { return name + '|' + monthKey; }
+function loadPaidAmounts() {
   try {
-    var raw = safeStorage.getItem(PAID_KEY);
+    var raw = safeStorage.getItem(PAID_AMOUNTS_KEY);
     if (raw) {
       var parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') return parsed;
@@ -377,7 +377,7 @@ function loadPaid() {
   } catch (e) { /* fall through */ }
   return {};
 }
-function savePaid(paid) { safeStorage.setItem(PAID_KEY, JSON.stringify(paid)); }
+function savePaidAmounts(paidAmounts) { safeStorage.setItem(PAID_AMOUNTS_KEY, JSON.stringify(paidAmounts)); }
 
 function escapeHtml(str) {
   return String(str)
@@ -563,7 +563,9 @@ var state = {
   attendance: loadAttendance(initialSlots),
   rates: loadRates(),
   notes: loadNotes(),
-  paid: loadPaid(),
+  paidAmounts: loadPaidAmounts(),
+  paidModalName: null,
+  paidModalMonthKey: null,
   notificationsMuted: loadFlag(NOTIF_MUTE_KEY),
   alarmMuted: loadFlag(ALARM_MUTE_KEY),
   activeTab: 'board', // 'board' | 'payouts' | 'members'
@@ -798,14 +800,16 @@ function renderPayoutsTab() {
   NAMES.forEach(function (name) {
     var count = countAttendance(name, targetKey);
     var rate = state.rates[name] || 0;
-    var isPaid = !!state.paid[paidKey(name, targetKey)];
-    var total = isPaid ? 0 : count * rate;
+    var total = count * rate;
+    var paidSoFar = state.paidAmounts[paidAmountKey(name, targetKey)] || 0;
+    var remaining = Math.max(total - paidSoFar, 0);
+    var isFullyPaid = paidSoFar > 0 && remaining < 0.005;
 
     html += '<div class="stats-row payout-row">';
-    html += '  <div><div class="stats-month">' + name + '</div><div class="stats-tag">' + count + ' session' + (count === 1 ? '' : 's') + ' × €' + rate + '</div></div>';
+    html += '  <div><div class="stats-month">' + name + '</div><div class="stats-tag">' + count + ' session' + (count === 1 ? '' : 's') + ' × €' + rate + (paidSoFar > 0 ? ' · €' + formatMoney(paidSoFar) + ' paid' : '') + '</div></div>';
     html += '  <div class="payout-right">';
-    html += '    <div class="stats-count"><span class="cur">€</span>' + formatMoney(total) + '</div>';
-    html += '    <button class="paid-btn' + (isPaid ? ' paid' : '') + '" data-name="' + name + '">' + (isPaid ? '✓ Paid' : 'Paid') + '</button>';
+    html += '    <div class="stats-count"><span class="cur">€</span>' + formatMoney(remaining) + '</div>';
+    html += '    <button class="paid-btn' + (isFullyPaid ? ' paid' : '') + '" data-name="' + name + '">' + (isFullyPaid ? '✓ Paid' : 'Paid') + '</button>';
     html += '  </div>';
     html += '</div>';
   });
@@ -823,14 +827,67 @@ function wirePayoutsTab() {
   var targetKey = payoutMonthKeyForOffset(state.payoutMonthOffset);
   Array.prototype.forEach.call(document.querySelectorAll('.paid-btn'), function (btn) {
     btn.onclick = function () {
-      var name = btn.getAttribute('data-name');
-      var key = paidKey(name, targetKey);
-      if (state.paid[key]) delete state.paid[key];
-      else state.paid[key] = true;
-      savePaid(state.paid);
-      render();
+      openPaidModal(btn.getAttribute('data-name'), targetKey);
     };
   });
+}
+
+function openPaidModal(name, monthKey) {
+  state.paidModalName = name;
+  state.paidModalMonthKey = monthKey;
+  renderPaidModal();
+}
+function closePaidModal() {
+  state.paidModalName = null;
+  state.paidModalMonthKey = null;
+  document.getElementById('modalOverlay').classList.remove('open');
+  render();
+}
+function renderPaidModal() {
+  var overlay = document.getElementById('modalOverlay');
+  var card = document.getElementById('modalCard');
+  var name = state.paidModalName;
+  if (!name) { overlay.classList.remove('open'); return; }
+
+  var monthKey = state.paidModalMonthKey;
+  var count = countAttendance(name, monthKey);
+  var rate = state.rates[name] || 0;
+  var total = count * rate;
+  var key = paidAmountKey(name, monthKey);
+  var paidSoFar = state.paidAmounts[key] || 0;
+  var remaining = Math.max(total - paidSoFar, 0);
+
+  var html = '<div class="modal-title">' + name + ' · Payment (' + monthLabel(monthKey) + ')</div>';
+  html += '<div style="text-align:center;font-size:13px;color:#555;margin:0 0 14px 0;line-height:1.5;">';
+  html += 'Total owed: <b>€' + formatMoney(total) + '</b><br/>';
+  if (paidSoFar > 0) html += 'Already paid: <b>€' + formatMoney(paidSoFar) + '</b><br/>';
+  html += 'Pay all the amount?';
+  html += '</div>';
+  html += '<div class="rate-input-row"><span class="rate-euro">€</span><input type="number" id="paidAmountInput" inputmode="decimal" step="0.5" min="0" value="' + formatMoney(remaining) + '" /></div>';
+  html += '<div class="modal-buttons"><button class="btn-text" id="btnPaidClose">Cancel</button><button class="btn-primary" id="btnPaidConfirm">Confirm</button></div>';
+  if (paidSoFar > 0) {
+    html += '<div style="text-align:center;margin-top:10px;"><button class="btn-text" id="btnPaidReset" style="font-size:12px;color:#ff3b30;">Reset payments for this month</button></div>';
+  }
+
+  card.innerHTML = html;
+  overlay.classList.add('open');
+
+  document.getElementById('btnPaidClose').onclick = closePaidModal;
+  document.getElementById('btnPaidConfirm').onclick = function () {
+    var val = parseFloat(document.getElementById('paidAmountInput').value);
+    if (isNaN(val) || val < 0) val = 0;
+    state.paidAmounts[key] = paidSoFar + val;
+    savePaidAmounts(state.paidAmounts);
+    closePaidModal();
+  };
+  var resetBtn = document.getElementById('btnPaidReset');
+  if (resetBtn) {
+    resetBtn.onclick = function () {
+      delete state.paidAmounts[key];
+      savePaidAmounts(state.paidAmounts);
+      closePaidModal();
+    };
+  }
 }
 
 function renderMembersTab() {
@@ -1110,6 +1167,7 @@ document.getElementById('modalOverlay').onclick = function (e) {
   if (state.editingRateName) closeRateModal();
   if (state.slotsModalOpen) closeSlotsModal();
   if (state.activeSlotCell) closeSlotCellModal();
+  if (state.paidModalName) closePaidModal();
 };
 
 // -- In-app reminder/alarm loop --
