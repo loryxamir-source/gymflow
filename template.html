@@ -208,6 +208,10 @@ body {
 .busiest-bar-fill { height: 100%; background: #007aff; border-radius: 5px; }
 .busiest-row.busiest-max .busiest-bar-fill { background: #ff9500; }
 .busiest-row.busiest-max .busiest-day { color: #ff9500; }
+
+.busiest-card.cancelled .busiest-bar-fill { background: #ff3b30; }
+.busiest-card.cancelled .busiest-row.busiest-max .busiest-bar-fill { background: #b0201a; }
+.busiest-card.cancelled .busiest-row.busiest-max .busiest-day { color: #b0201a; }
 .busiest-count { width: 20px; text-align: right; font-size: 11px; color: #8e8e93; font-weight: bold; }
 
 .rate-input-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 14px; }
@@ -312,6 +316,7 @@ var ATTEND_KEY = 'gymflow.attendance.v2';
 var RATES_KEY = 'gymflow.rates.v1';
 var NOTES_KEY = 'gymflow.notes.v1';
 var PAID_AMOUNTS_KEY = 'gymflow.paidAmounts.v1';
+var CANCELLATIONS_KEY = 'gymflow.cancellations.v1';
 var SLOTS_KEY = 'gymflow.slots.v3'; // bumped so the new 05:00-23:30 default range applies even for existing installs
 var NOTIF_MUTE_KEY = 'gymflow.notifMuted.v1';
 var ALARM_MUTE_KEY = 'gymflow.alarmMuted.v1';
@@ -428,6 +433,21 @@ function loadPaidAmounts() {
   return {};
 }
 function savePaidAmounts(paidAmounts) { safeStorage.setItem(PAID_AMOUNTS_KEY, JSON.stringify(paidAmounts)); }
+
+// -- Cancellations (isoDate|slot|name -> cumulative count). Recorded only when
+// an appointment that was actually saved/booked gets removed — used for the
+// separate "Busiest Days (Cancelled)" stat, kept apart from normal attendance. --
+function loadCancellations() {
+  try {
+    var raw = safeStorage.getItem(CANCELLATIONS_KEY);
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch (e) { /* fall through */ }
+  return {};
+}
+function saveCancellations(cancellations) { safeStorage.setItem(CANCELLATIONS_KEY, JSON.stringify(cancellations)); }
 
 function escapeHtml(str) {
   return String(str)
@@ -554,6 +574,21 @@ function countByWeekday(monthKey) {
   return counts;
 }
 
+// -- Busiest weekday for CANCELLED appointments only, kept separate from the
+// normal attendance-based Busiest Days above. --
+function countCancelledByWeekday(monthKey) {
+  var counts = [0, 0, 0, 0, 0, 0, 0];
+  Object.keys(state.cancellations).forEach(function (key) {
+    var n = state.cancellations[key];
+    if (!n) return;
+    var isoDate = key.split('|')[0];
+    if (monthKeyOf(isoDate) !== monthKey) return;
+    var dow = parseISODate(isoDate).getDay();
+    counts[(dow + 6) % 7] += n;
+  });
+  return counts;
+}
+
 // -- Running balance (so an overpayment this month carries forward and
 // reduces what's owed next month, instead of just being discarded) --
 function monthKeysWithActivity(name, upToMonthKey) {
@@ -659,6 +694,7 @@ var state = {
   rates: loadRates(),
   notes: loadNotes(),
   paidAmounts: loadPaidAmounts(),
+  cancellations: loadCancellations(),
   paidModalName: null,
   paidModalMonthKey: null,
   paidConfirmAction: null,
@@ -676,6 +712,7 @@ var state = {
   slotsModalOpen: false,
   activeSlotCell: null,
   slotCellDraft: null,
+  slotCellOriginal: null,
   slotCellConfirmName: null,
   noteEditKey: null,
   noteEditText: '',
@@ -688,9 +725,12 @@ var state = {
 function openSlotCellModal(isoDate, slot, dayLabel) {
   state.activeSlotCell = { isoDate: isoDate, slot: slot, dayLabel: dayLabel };
   state.slotCellDraft = {};
+  state.slotCellOriginal = {};
   state.slotCellConfirmName = null;
   NAMES.forEach(function (name) {
-    state.slotCellDraft[name] = !!state.attendance[attendKey(isoDate, slot, name)];
+    var wasBooked = !!state.attendance[attendKey(isoDate, slot, name)];
+    state.slotCellDraft[name] = wasBooked;
+    state.slotCellOriginal[name] = wasBooked;
   });
   renderSlotCellModal();
 }
@@ -805,16 +845,26 @@ function renderSlotCellModal() {
     };
   });
   document.getElementById('btnSlotCellSave').onclick = function () {
+    var cancellationsChanged = false;
     NAMES.forEach(function (name) {
       var key = attendKey(cell.isoDate, cell.slot, name);
+      var wasBooked = !!state.slotCellOriginal[name];
       if (state.slotCellDraft[name]) {
         state.attendance[key] = true;
       } else {
         delete state.attendance[key];
         if (state.notes[key]) { delete state.notes[key]; saveNotes(state.notes); }
+        // Only counts as a cancellation if it was an actual saved appointment
+        // being removed, not a checkbox that was toggled on/off in this same
+        // not-yet-saved session without ever being booked.
+        if (wasBooked) {
+          state.cancellations[key] = (state.cancellations[key] || 0) + 1;
+          cancellationsChanged = true;
+        }
       }
     });
     saveAttendance(state.attendance);
+    if (cancellationsChanged) saveCancellations(state.cancellations);
     closeSlotCellModal();
   };
 }
@@ -983,6 +1033,21 @@ function renderStatsTab() {
     var c = weekdayCounts[i];
     var pct = maxDayCount > 0 ? (c / maxDayCount * 100) : 0;
     html += '  <div class="busiest-row' + (maxDayCount > 0 && c === maxDayCount ? ' busiest-max' : '') + '">';
+    html += '    <span class="busiest-day">' + label + '</span>';
+    html += '    <div class="busiest-bar-track"><div class="busiest-bar-fill" style="width:' + pct + '%"></div></div>';
+    html += '    <span class="busiest-count">' + c + '</span>';
+    html += '  </div>';
+  });
+  html += '</div>';
+
+  var cancelledWeekdayCounts = countCancelledByWeekday(targetKey);
+  var maxCancelledDayCount = Math.max.apply(null, cancelledWeekdayCounts);
+  html += '<div class="busiest-card cancelled">';
+  html += '  <div class="attendance-title">Busiest Days (Cancelled) · ' + monthLabel(targetKey) + '</div>';
+  DAY_LABELS.forEach(function (label, i) {
+    var c = cancelledWeekdayCounts[i];
+    var pct = maxCancelledDayCount > 0 ? (c / maxCancelledDayCount * 100) : 0;
+    html += '  <div class="busiest-row' + (maxCancelledDayCount > 0 && c === maxCancelledDayCount ? ' busiest-max' : '') + '">';
     html += '    <span class="busiest-day">' + label + '</span>';
     html += '    <div class="busiest-bar-track"><div class="busiest-bar-fill" style="width:' + pct + '%"></div></div>';
     html += '    <span class="busiest-count">' + c + '</span>';
