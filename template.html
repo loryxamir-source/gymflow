@@ -1710,6 +1710,7 @@ function exportPayoutsPdf() {
   showToast('Payouts PDF exported');
 }
 
+var TAB_ORDER = ['board', 'payouts', 'members', 'stats']; // left-to-right order in the tab bar, for slide direction
 var lastRenderedTab = null;
 var SCROLLABLE_LIST_SELECTOR = '.slot-list, .payouts-list, .members-list, .stats-tab-list';
 var pendingPopCell = null; // { isoDate, slot } — set right before a save that added a new booking
@@ -1721,7 +1722,8 @@ function render() {
   // the whole tab from scratch — without this, that wipes the user's scroll
   // position back to the top every second while they're mid-scroll.
   var prevScrollEl = document.querySelector(SCROLLABLE_LIST_SELECTOR);
-  var tabChanged = lastRenderedTab !== state.activeTab;
+  var previousTab = lastRenderedTab;
+  var tabChanged = previousTab !== state.activeTab;
   var prevScrollTop = (prevScrollEl && !tabChanged) ? prevScrollEl.scrollTop : 0;
 
   var html = '';
@@ -1764,18 +1766,25 @@ function render() {
   app.innerHTML = html;
   lastRenderedTab = state.activeTab;
 
-  // Only fade in when the tab actually changed — everything else (booking a
+  // Only animate when the tab actually changed — everything else (booking a
   // slot, saving a note, ticking the clock) re-renders too, and animating
-  // those would feel flickery rather than a clean page transition.
+  // those would feel flickery rather than a clean page transition. Slides
+  // horizontally in the direction of travel through the tab bar (Board ->
+  // Payouts -> Members -> Stats), like turning to the next/previous page.
   if (tabChanged) {
+    var oldTabIdx = TAB_ORDER.indexOf(previousTab);
+    var newTabIdx = TAB_ORDER.indexOf(state.activeTab);
+    var slideDir = (oldTabIdx === -1 || newTabIdx === -1 || newTabIdx === oldTabIdx) ? 1 : (newTabIdx > oldTabIdx ? 1 : -1);
+    var slideOffset = 46; // px — incoming content starts offset to the side it's arriving from
+
     var newTabContent = document.querySelector('.tab-content');
     if (newTabContent) {
       newTabContent.style.opacity = '0';
-      newTabContent.style.transform = 'translateY(14px) scale(0.98)';
+      newTabContent.style.transform = 'translateX(' + (slideDir * slideOffset) + 'px)';
       requestAnimationFrame(function () {
         requestAnimationFrame(function () {
           newTabContent.style.opacity = '1';
-          newTabContent.style.transform = 'translateY(0) scale(1)';
+          newTabContent.style.transform = 'translateX(0)';
         });
       });
     }
