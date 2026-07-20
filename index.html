@@ -201,6 +201,15 @@ body {
 .member-note-icon { font-size: 12px; }
 .member-note-text { font-size: 11px; color: var(--text-secondary); font-weight: bold; flex: 1; text-align: left; }
 
+.member-noshow-row {
+  display: flex; align-items: center; gap: 6px; padding: 2px 6px 10px 6px; margin-top: -6px;
+  border-bottom: 1px solid var(--border-color); cursor: pointer;
+}
+.member-noshow-row:last-child { border-bottom: none; }
+.member-noshow-icon { font-size: 12px; }
+.member-noshow-text { font-size: 11px; color: var(--text-secondary); font-weight: bold; flex: 1; text-align: left; }
+.member-noshow-row.active .member-noshow-text { color: #ff3b30; }
+
 .note-textarea {
   width: 100%; min-height: 80px; border: 1px solid var(--input-border); border-radius: 8px; padding: 8px;
   font-size: 14px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin-bottom: 12px; resize: vertical;
@@ -246,6 +255,7 @@ body {
 .attendance-rank { width: 22px; font-size: 13px; font-weight: bold; text-align: center; flex: 0 0 auto; }
 .attendance-name { flex: 1; font-family: 'LuckiestGuy'; font-weight: bold; font-size: 13px; color: var(--text-primary); }
 .attendance-count { font-size: 11px; color: var(--text-secondary); font-weight: bold; }
+.noshow-card .attendance-count { color: #ff3b30; }
 
 .busiest-card { background: var(--bg-surface-alt); border-radius: 10px; padding: 10px 14px; margin: 0 0 8px 0; }
 .busiest-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
@@ -379,7 +389,7 @@ var DEFAULT_NAMES = [
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784536750594';
+var BUILD_VERSION_LABEL = '1784537193246';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
@@ -387,6 +397,7 @@ var RATES_KEY = 'gymflow.rates.v1';
 var NOTES_KEY = 'gymflow.notes.v1';
 var PAID_AMOUNTS_KEY = 'gymflow.paidAmounts.v1';
 var CANCELLATIONS_KEY = 'gymflow.cancellations.v1';
+var NO_SHOWS_KEY = 'gymflow.noShows.v1';
 var SLOTS_KEY = 'gymflow.slots.v3'; // bumped so the new 05:00-23:30 default range applies even for existing installs
 var MEMBERS_KEY = 'gymflow.members.v1';
 var THEME_KEY = 'gymflow.theme.v1';
@@ -554,6 +565,31 @@ function loadCancellations() {
   return {};
 }
 function saveCancellations(cancellations) { safeStorage.setItem(CANCELLATIONS_KEY, JSON.stringify(cancellations)); }
+
+// -- No-shows (isoDate|slot|name -> true). Marked on a booked appointment that
+// the person didn't actually attend, tracked separately per person for Stats. --
+function loadNoShows() {
+  try {
+    var raw = safeStorage.getItem(NO_SHOWS_KEY);
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch (e) { /* fall through */ }
+  return {};
+}
+function saveNoShows(noShows) { safeStorage.setItem(NO_SHOWS_KEY, JSON.stringify(noShows)); }
+function countNoShows(name, monthKey) {
+  var count = 0;
+  Object.keys(state.noShows).forEach(function (key) {
+    if (!state.noShows[key]) return;
+    var parts = key.split('|');
+    if (parts[2] !== name) return;
+    if (monthKeyOf(parts[0]) !== monthKey) return;
+    count++;
+  });
+  return count;
+}
 
 function escapeHtml(str) {
   return String(str)
@@ -819,6 +855,7 @@ var state = {
   notes: loadNotes(),
   paidAmounts: loadPaidAmounts(),
   cancellations: loadCancellations(),
+  noShows: loadNoShows(),
   paidModalName: null,
   paidModalMonthKey: null,
   paidConfirmAction: null,
@@ -905,18 +942,24 @@ function renderSlotCellModal() {
       var savedKey = attendKey(cell.isoDate, cell.slot, name);
       var isActualAppointment = !!state.attendance[savedKey];
       var note = state.notes[savedKey];
+      var isNoShow = !!state.noShows[savedKey];
 
       html += '<div class="member-toggle-row" data-name="' + name + '">';
       html += '  <span class="member-toggle-name">' + name + '</span>';
       html += '  <span class="member-toggle-check">' + (checked ? '✓' : '') + '</span>';
       html += '</div>';
 
-      // A comment only makes sense for an appointment that's actually booked
-      // (saved), not just a checkbox toggled in this not-yet-saved draft.
+      // A comment/no-show mark only makes sense for an appointment that's
+      // actually booked (saved), not just a checkbox toggled in this
+      // not-yet-saved draft.
       if (isActualAppointment) {
         html += '<div class="member-note-row" data-name="' + name + '">';
         html += '  <span class="member-note-icon">💬</span>';
         html += '  <span class="member-note-text">' + (note ? escapeHtml(note) : 'Add Comment') + '</span>';
+        html += '</div>';
+        html += '<div class="member-noshow-row' + (isNoShow ? ' active' : '') + '" data-name="' + name + '">';
+        html += '  <span class="member-noshow-icon">🚫</span>';
+        html += '  <span class="member-noshow-text">' + (isNoShow ? 'Marked as No-show' : 'Mark as No-show') + '</span>';
         html += '</div>';
       }
     });
@@ -958,7 +1001,7 @@ function renderSlotCellModal() {
   if (slotMemberSearchInput) {
     slotMemberSearchInput.addEventListener('input', function () {
       var q = slotMemberSearchInput.value.trim().toLowerCase();
-      Array.prototype.forEach.call(document.querySelectorAll('.member-toggle-row, .member-note-row'), function (rowEl) {
+      Array.prototype.forEach.call(document.querySelectorAll('.member-toggle-row, .member-note-row, .member-noshow-row'), function (rowEl) {
         var name = (rowEl.getAttribute('data-name') || '').toLowerCase();
         rowEl.style.display = (!q || name.indexOf(q) !== -1) ? '' : 'none';
       });
@@ -983,6 +1026,16 @@ function renderSlotCellModal() {
       openNoteEditor(cell.isoDate, cell.slot, rowEl.getAttribute('data-name'));
     };
   });
+  Array.prototype.forEach.call(document.querySelectorAll('.member-noshow-row'), function (rowEl) {
+    rowEl.onclick = function () {
+      var name = rowEl.getAttribute('data-name');
+      var key = attendKey(cell.isoDate, cell.slot, name);
+      if (state.noShows[key]) delete state.noShows[key];
+      else state.noShows[key] = true;
+      saveNoShows(state.noShows);
+      renderSlotCellModal();
+    };
+  });
   document.getElementById('btnSlotCellSave').onclick = function () {
     var cancellationsChanged = false;
     NAMES.forEach(function (name) {
@@ -993,6 +1046,7 @@ function renderSlotCellModal() {
       } else {
         delete state.attendance[key];
         if (state.notes[key]) { delete state.notes[key]; saveNotes(state.notes); }
+        if (state.noShows[key]) { delete state.noShows[key]; saveNoShows(state.noShows); }
         // Only counts as a cancellation if it was an actual saved appointment
         // being removed, not a checkbox that was toggled on/off in this same
         // not-yet-saved session without ever being booked.
@@ -1207,6 +1261,20 @@ function renderStatsTab() {
     html += '    <span class="busiest-day">' + label + '</span>';
     html += '    <div class="busiest-bar-track"><div class="busiest-bar-fill" style="width:' + pct + '%"></div></div>';
     html += '    <span class="busiest-count">' + c + '</span>';
+    html += '  </div>';
+  });
+  html += '</div>';
+
+  var noShowRows = NAMES.map(function (name) {
+    return { name: name, count: countNoShows(name, targetKey) };
+  }).sort(function (a, b) { return b.count - a.count; });
+  html += '<div class="attendance-card noshow-card">';
+  html += '  <div class="attendance-title">No-Shows · ' + monthLabel(targetKey) + '</div>';
+  noShowRows.forEach(function (r) {
+    html += '  <div class="attendance-row">';
+    html += '    <span class="attendance-rank">🚫</span>';
+    html += '    <span class="attendance-name">' + r.name + '</span>';
+    html += '    <span class="attendance-count">' + r.count + ' no-show' + (r.count === 1 ? '' : 's') + '</span>';
     html += '  </div>';
   });
   html += '</div>';
@@ -1971,7 +2039,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784536750594').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784537193246').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
