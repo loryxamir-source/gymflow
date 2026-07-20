@@ -378,7 +378,7 @@ var DEFAULT_NAMES = [
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784533810526';
+var BUILD_VERSION_LABEL = '1784534312782';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
@@ -451,6 +451,16 @@ function addMember(name) {
   name = name.trim();
   if (!name || NAMES.indexOf(name) !== -1) return false;
   NAMES.push(name);
+  saveMembers(NAMES);
+  return true;
+}
+function removeMember(name) {
+  // Only drops them from the active roster — their historical bookings,
+  // notes, and payment records are left alone in storage (just no longer
+  // shown anywhere, since nothing iterates a name outside of NAMES).
+  var idx = NAMES.indexOf(name);
+  if (idx === -1) return false;
+  NAMES.splice(idx, 1);
   saveMembers(NAMES);
   return true;
 }
@@ -808,6 +818,7 @@ var state = {
   editingRateName: null,
   rateDraftValue: null,
   rateConfirmPending: false,
+  removeMemberConfirm: false,
   slotsModalOpen: false,
   activeSlotCell: null,
   slotCellDraft: null,
@@ -1643,12 +1654,14 @@ function openRateModal(name) {
   state.editingRateName = name;
   state.rateDraftValue = null;
   state.rateConfirmPending = false;
+  state.removeMemberConfirm = false;
   renderRateModal();
 }
 function closeRateModal() {
   state.editingRateName = null;
   state.rateDraftValue = null;
   state.rateConfirmPending = false;
+  state.removeMemberConfirm = false;
   document.getElementById('modalOverlay').classList.remove('open');
   render();
 }
@@ -1661,7 +1674,11 @@ function renderRateModal() {
   var currentRate = state.rates[name] || 0;
   var html;
 
-  if (state.rateConfirmPending) {
+  if (state.removeMemberConfirm) {
+    html = '<div class="modal-title">Remove ' + name + '?</div>';
+    html += '<div style="text-align:center;font-size:13px;color:#555;margin:0 0 16px 0;line-height:1.4;">Are you sure you want to remove <b>' + name + '</b> from your member list? They\'ll disappear from Board, Payouts, and Stats. Their past bookings and payment history are kept, just hidden.</div>';
+    html += '<div class="modal-buttons"><button class="btn-text" id="btnRemoveMemberCancel">Cancel</button><button class="btn-destructive" id="btnRemoveMemberConfirm">Remove</button></div>';
+  } else if (state.rateConfirmPending) {
     html = '<div class="modal-title">Change ' + name + '\'s Price?</div>';
     html += '<div style="text-align:center;font-size:13px;color:#555;margin:0 0 16px 0;line-height:1.4;">Are you sure you want to change <b>' + name + '</b>\'s price to <b>€' + state.rateDraftValue + '</b> per session?</div>';
     html += '<div class="modal-buttons"><button class="btn-text" id="btnRateCancelChange">Cancel</button><button class="btn-primary" id="btnRateConfirmChange">Confirm</button></div>';
@@ -1670,10 +1687,25 @@ function renderRateModal() {
     html = '<div class="modal-title">' + name + ' · Rate per Session</div>';
     html += '<div class="rate-input-row"><span class="rate-euro">€</span><input type="number" id="rateInput" inputmode="decimal" step="0.5" min="0" value="' + shownValue + '" /></div>';
     html += '<div class="modal-buttons"><button class="btn-text" id="btnRateClose">Close</button><button class="btn-primary" id="btnRateSave">Save</button></div>';
+    html += '<div style="text-align:center;margin-top:10px;"><button class="busiest-clear-btn" id="btnRemoveMemberStart">Remove Member</button></div>';
   }
 
   card.innerHTML = html;
   overlay.classList.add('open');
+
+  if (state.removeMemberConfirm) {
+    document.getElementById('btnRemoveMemberCancel').onclick = function () {
+      state.removeMemberConfirm = false;
+      renderRateModal();
+    };
+    document.getElementById('btnRemoveMemberConfirm').onclick = function () {
+      removeMember(name);
+      state.removeMemberConfirm = false;
+      closeRateModal();
+      showToast(name + ' removed');
+    };
+    return;
+  }
 
   if (state.rateConfirmPending) {
     document.getElementById('btnRateCancelChange').onclick = function () {
@@ -1694,6 +1726,10 @@ function renderRateModal() {
     if (isNaN(val) || val < 0) val = 0;
     state.rateDraftValue = val;
     state.rateConfirmPending = true;
+    renderRateModal();
+  };
+  document.getElementById('btnRemoveMemberStart').onclick = function () {
+    state.removeMemberConfirm = true;
     renderRateModal();
   };
 }
@@ -1835,7 +1871,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784533810526').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784534312782').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
