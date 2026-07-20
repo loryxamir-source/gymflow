@@ -148,6 +148,10 @@ body {
 .tab-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; width: 100%; min-height: 0; }
 
 .edit-slots-btn-row { display: flex; justify-content: center; margin-bottom: 6px; }
+
+.daily-summary-card { background: var(--bg-surface-alt); border-radius: 10px; padding: 10px 14px; margin: 0 12px 8px 12px; }
+.daily-summary-line { font-size: 12px; color: var(--text-primary); font-weight: bold; line-height: 1.4; }
+.daily-summary-line + .daily-summary-line { margin-top: 6px; }
 .edit-slots-btn { font-size: 12px; color: #007aff; font-weight: bold; background: none; border: none; }
 
 
@@ -375,7 +379,7 @@ var DEFAULT_NAMES = [
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784536392734';
+var BUILD_VERSION_LABEL = '1784536750594';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
@@ -659,6 +663,24 @@ function countAttendance(name, monthKey) {
 function formatMoney(n) {
   var s = n.toFixed(2);
   return s.replace(/\.00$/, '');
+}
+
+// -- Daily summary ("Today you have 3 appointments: Ilias 10:00, ...") --
+function apptsForDate(isoDate) {
+  var items = [];
+  state.slots.forEach(function (slot) {
+    NAMES.forEach(function (name) {
+      if (state.attendance[attendKey(isoDate, slot, name)]) items.push({ name: name, slot: slot });
+    });
+  });
+  items.sort(function (a, b) { return a.slot < b.slot ? -1 : (a.slot > b.slot ? 1 : 0); });
+  return items;
+}
+function dailySummaryText(isoDate, label) {
+  var items = apptsForDate(isoDate);
+  if (!items.length) return label + ': no appointments.';
+  var list = items.map(function (it) { return it.name + ' ' + it.slot; }).join(', ');
+  return label + ' you have ' + items.length + ' appointment' + (items.length === 1 ? '' : 's') + ': ' + list;
 }
 
 // -- Busiest weekday (Mon..Sun), across all members, for the given month --
@@ -1003,6 +1025,12 @@ function renderBoardTab() {
   html += '  <span class="week-dates-text">' + dayLabel + ' ' + shortDateLabel(dayISO) + '</span>';
   html += '  <button class="week-arrow" id="btnNextDay">›</button>';
   if (state.dayOffset !== 0) html += '  <button class="week-reset-text" id="btnToday">Today</button>';
+  html += '</div>';
+
+  var tomorrowISO = formatISODate(addDays(parseISODate(state.todayISO), 1));
+  html += '<div class="daily-summary-card">';
+  html += '  <div class="daily-summary-line">' + escapeHtml(dailySummaryText(state.todayISO, 'Today')) + '</div>';
+  html += '  <div class="daily-summary-line">' + escapeHtml(dailySummaryText(tomorrowISO, 'Tomorrow')) + '</div>';
   html += '</div>';
 
   html += '<div class="edit-slots-btn-row"><button class="edit-slots-btn" id="btnManageSlots">✎ Manage Time Slots</button></div>';
@@ -1943,7 +1971,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784536392734').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784536750594').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
