@@ -22,6 +22,48 @@
   font-style: normal;
 }
 
+:root {
+  --bg-page: #ffffff;
+  --bg-surface: #f2f2f7;
+  --bg-surface-alt: #f8f8fa;
+  --bg-track: #eceef2;
+  --bg-card: #ffffff;
+  --text-primary: #1c1c1e;
+  --text-secondary: #8e8e93;
+  --border-color: #eee;
+  --border-strong: #e5e5ea;
+  --input-border: #d0d0d5;
+  --muted-bg: #ffe5e5;
+}
+:root[data-theme="dark"] {
+  --bg-page: #000000;
+  --bg-surface: #1c1c1e;
+  --bg-surface-alt: #202024;
+  --bg-track: #2c2c2e;
+  --bg-card: #1c1c1e;
+  --text-primary: #f2f2f7;
+  --text-secondary: #9a9aa0;
+  --border-color: #2c2c2e;
+  --border-strong: #38383a;
+  --input-border: #48484a;
+  --muted-bg: #3a1f1f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-page: #000000;
+    --bg-surface: #1c1c1e;
+    --bg-surface-alt: #202024;
+    --bg-track: #2c2c2e;
+    --bg-card: #1c1c1e;
+    --text-primary: #f2f2f7;
+    --text-secondary: #9a9aa0;
+    --border-color: #2c2c2e;
+    --border-strong: #38383a;
+    --input-border: #48484a;
+    --muted-bg: #3a1f1f;
+  }
+}
+
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 html, body {
@@ -30,7 +72,8 @@ html, body {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
-  background: #ffffff;
+  background: var(--bg-page);
+  color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
@@ -72,27 +115,27 @@ body {
 }
 
 .clock-box { display: flex; flex-direction: column; align-items: flex-start; }
-.clock-text { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 22px; color: #1c1c1e; font-variant-numeric: tabular-nums; }
-.clock-label { font-size: 11px; color: #8e8e93; font-weight: bold; margin-top: -2px; }
+.clock-text { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 22px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.clock-label { font-size: 11px; color: var(--text-secondary); font-weight: bold; margin-top: -2px; }
 
 .top-bar-buttons { display: flex; align-items: center; gap: 10px; }
 .icon-btn {
   width: 42px; height: 42px; border-radius: 21px;
-  background: #f2f2f7; display: flex; align-items: center; justify-content: center;
+  background: var(--bg-surface); display: flex; align-items: center; justify-content: center;
   font-size: 20px; border: none; font-weight: bold;
 }
-.icon-btn.muted { background: #ffe5e5; }
+.icon-btn.muted { background: var(--muted-bg); }
 
 .title {
   font-family: 'LuckiestGuy'; font-weight: bold; font-size: 28px;
-  text-align: center; margin: 12px 0 4px 0; color: #1c1c1e;
+  text-align: center; margin: 12px 0 4px 0; color: var(--text-primary);
 }
 
 .week-bar {
   display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;
 }
-.week-range-text { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 14px; color: #1c1c1e; }
-.week-dates-text { font-size: 12px; color: #8e8e93; font-weight: bold; }
+.week-range-text { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 14px; color: var(--text-primary); }
+.week-dates-text { font-size: 12px; color: var(--text-secondary); font-weight: bold; }
 .week-reset-text { font-size: 12px; color: #007aff; font-weight: bold; background: none; border: none; }
 
 .week-arrow {
@@ -122,39 +165,40 @@ body {
 
 .pull-indicator {
   height: 0; overflow: hidden; display: flex; align-items: center; justify-content: center;
-  font-size: 11px; color: #8e8e93; font-weight: bold; text-align: center;
+  font-size: 11px; color: var(--text-secondary); font-weight: bold; text-align: center;
 }
 
-.slot-row { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid #eee; }
-.slot-time { width: 46px; font-family: 'LuckiestGuy'; font-weight: bold; font-size: 12px; color: #1c1c1e; flex: 0 0 auto; }
+.slot-row { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--border-color); }
+.slot-time { width: 46px; font-family: 'LuckiestGuy'; font-weight: bold; font-size: 12px; color: var(--text-primary); flex: 0 0 auto; }
 .slot-cell {
-  flex: 1; min-width: 0; padding: 10px 8px; border-radius: 8px; background: #f2f2f7; border: none;
-  font-family: 'LuckiestGuy'; font-weight: bold; font-size: 11px; color: #8e8e93; text-align: center;
+  flex: 1; min-width: 0; padding: 10px 8px; border-radius: 8px; background: var(--bg-surface); border: none;
+  font-family: 'LuckiestGuy'; font-weight: bold; font-size: 11px; color: var(--text-secondary); text-align: center;
 }
 .slot-cell.filled { background: #007aff; color: #fff; }
 .slot-cell.completed { background: #34c759; color: #fff; }
 
 .member-toggle-list { max-height: 46vh; overflow-y: auto; -webkit-overflow-scrolling: touch; margin-bottom: 8px; }
-.member-toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 6px; border-bottom: 1px solid #eee; }
+.member-toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 6px; border-bottom: 1px solid var(--border-color); }
 .member-toggle-row:last-child { border-bottom: none; }
-.member-toggle-name { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 14px; color: #1c1c1e; }
+.member-toggle-name { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 14px; color: var(--text-primary); }
 .member-toggle-check { font-size: 18px; font-weight: bold; color: #007aff; width: 24px; text-align: center; }
 
 .member-note-row {
   display: flex; align-items: center; gap: 6px; padding: 2px 6px 10px 6px; margin-top: -6px;
-  border-bottom: 1px solid #eee; cursor: pointer;
+  border-bottom: 1px solid var(--border-color); cursor: pointer;
 }
 .member-note-row:last-child { border-bottom: none; }
 .member-note-icon { font-size: 12px; }
-.member-note-text { font-size: 11px; color: #8e8e93; font-weight: bold; flex: 1; text-align: left; }
+.member-note-text { font-size: 11px; color: var(--text-secondary); font-weight: bold; flex: 1; text-align: left; }
 
 .note-textarea {
-  width: 100%; min-height: 80px; border: 1px solid #d0d0d5; border-radius: 8px; padding: 8px;
+  width: 100%; min-height: 80px; border: 1px solid var(--input-border); border-radius: 8px; padding: 8px;
   font-size: 14px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin-bottom: 12px; resize: vertical;
+  background: var(--bg-card); color: var(--text-primary);
 }
 
-.slots-manage-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px; border-bottom: 1px solid #eee; }
-.slots-manage-time { font-weight: bold; font-family: 'LuckiestGuy'; font-size: 13px; color: #1c1c1e; }
+.slots-manage-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px; border-bottom: 1px solid var(--border-color); }
+.slots-manage-time { font-weight: bold; font-family: 'LuckiestGuy'; font-size: 13px; color: var(--text-primary); }
 .slots-remove-btn { color: #ff3b30; font-weight: bold; background: none; border: none; font-size: 18px; }
 .slots-manage-list { max-height: 220px; overflow-y: auto; }
 .slots-add-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; justify-content: center; }
@@ -164,47 +208,47 @@ body {
   display: none; align-items: center; justify-content: center; z-index: 100;
 }
 .modal-overlay.open { display: flex; }
-.modal-card { background: #fff; border-radius: 14px; padding: 16px; width: 82%; max-width: 320px; }
-.modal-title { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 15px; text-align: center; margin-bottom: 12px; color: #555; }
+.modal-card { background: var(--bg-card); color: var(--text-primary); border-radius: 14px; padding: 16px; width: 82%; max-width: 320px; }
+.modal-title { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 15px; text-align: center; margin-bottom: 12px; color: var(--text-secondary); }
 
 .time-select-row { display: flex; justify-content: center; align-items: center; gap: 8px; margin-bottom: 12px; }
-.time-select-row select { font-size: 24px; padding: 8px; border-radius: 8px; border: 1px solid #d0d0d5; font-weight: bold; background: #fff; }
+.time-select-row select { font-size: 24px; padding: 8px; border-radius: 8px; border: 1px solid var(--input-border); font-weight: bold; background: var(--bg-card); color: var(--text-primary); }
 .time-select-row .colon { font-size: 24px; font-weight: bold; }
 
-.stats-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 4px; border-bottom: 1px solid #eee; }
+.stats-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 4px; border-bottom: 1px solid var(--border-color); }
 .stats-row:last-child { border-bottom: none; margin-bottom: 4px; }
 .stats-row.member-row { cursor: pointer; }
-.stats-month { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 13px; color: #1c1c1e; }
-.stats-tag { font-size: 10px; color: #8e8e93; font-weight: bold; margin-top: 1px; }
+.stats-month { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 13px; color: var(--text-primary); }
+.stats-tag { font-size: 10px; color: var(--text-secondary); font-weight: bold; margin-top: 1px; }
 .stats-count { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 18px; color: #007aff; }
 .stats-count .cur { font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
 
 .payout-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .paid-btn {
   font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 12px; border: none;
-  background: #f2f2f7; color: #007aff;
+  background: var(--bg-surface); color: #007aff;
 }
 .paid-btn.paid { background: #34c759; color: #fff; }
 
 .revenue-card {
-  display: flex; align-items: center; justify-content: space-between; background: #f2f2f7;
+  display: flex; align-items: center; justify-content: space-between; background: var(--bg-surface);
   border-radius: 10px; padding: 12px 14px; margin: 0 0 8px 0;
 }
-.revenue-label { font-size: 12px; color: #8e8e93; font-weight: bold; }
+.revenue-label { font-size: 12px; color: var(--text-secondary); font-weight: bold; }
 .revenue-amount { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 20px; color: #34c759; }
 .revenue-amount .cur { font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
 
-.attendance-card { background: #f8f8fa; border-radius: 10px; padding: 10px 14px; margin: 0 0 8px 0; }
-.attendance-title { font-size: 12px; color: #8e8e93; font-weight: bold; margin-bottom: 6px; }
+.attendance-card { background: var(--bg-surface-alt); border-radius: 10px; padding: 10px 14px; margin: 0 0 8px 0; }
+.attendance-title { font-size: 12px; color: var(--text-secondary); font-weight: bold; margin-bottom: 6px; }
 .attendance-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
 .attendance-rank { width: 22px; font-size: 13px; font-weight: bold; text-align: center; flex: 0 0 auto; }
-.attendance-name { flex: 1; font-family: 'LuckiestGuy'; font-weight: bold; font-size: 13px; color: #1c1c1e; }
-.attendance-count { font-size: 11px; color: #8e8e93; font-weight: bold; }
+.attendance-name { flex: 1; font-family: 'LuckiestGuy'; font-weight: bold; font-size: 13px; color: var(--text-primary); }
+.attendance-count { font-size: 11px; color: var(--text-secondary); font-weight: bold; }
 
-.busiest-card { background: #f8f8fa; border-radius: 10px; padding: 10px 14px; margin: 0 0 8px 0; }
+.busiest-card { background: var(--bg-surface-alt); border-radius: 10px; padding: 10px 14px; margin: 0 0 8px 0; }
 .busiest-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
-.busiest-day { width: 34px; font-family: 'LuckiestGuy'; font-weight: bold; font-size: 12px; color: #1c1c1e; flex: 0 0 auto; }
-.busiest-bar-track { flex: 1; height: 10px; background: #eceef2; border-radius: 5px; overflow: hidden; }
+.busiest-day { width: 34px; font-family: 'LuckiestGuy'; font-weight: bold; font-size: 12px; color: var(--text-primary); flex: 0 0 auto; }
+.busiest-bar-track { flex: 1; height: 10px; background: var(--bg-track); border-radius: 5px; overflow: hidden; }
 .busiest-bar-fill { height: 100%; background: #007aff; border-radius: 5px; }
 .busiest-row.busiest-max .busiest-bar-fill { background: #ff9500; }
 .busiest-row.busiest-max .busiest-day { color: #ff9500; }
@@ -212,10 +256,10 @@ body {
 .busiest-card.cancelled .busiest-bar-fill { background: #ff3b30; }
 .busiest-card.cancelled .busiest-row.busiest-max .busiest-bar-fill { background: #b0201a; }
 .busiest-card.cancelled .busiest-row.busiest-max .busiest-day { color: #b0201a; }
-.busiest-count { width: 20px; text-align: right; font-size: 11px; color: #8e8e93; font-weight: bold; }
+.busiest-count { width: 20px; text-align: right; font-size: 11px; color: var(--text-secondary); font-weight: bold; }
 
 .rate-input-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 14px; }
-.rate-input-row input { font-size: 22px; padding: 8px; border-radius: 8px; border: 1px solid #d0d0d5; font-weight: bold; width: 100px; text-align: center; }
+.rate-input-row input { font-size: 22px; padding: 8px; border-radius: 8px; border: 1px solid var(--input-border); font-weight: bold; width: 100px; text-align: center; background: var(--bg-card); color: var(--text-primary); }
 .rate-euro { font-size: 22px; font-weight: bold; }
 
 .modal-buttons { display: flex; justify-content: space-between; margin-top: 8px; }
@@ -224,10 +268,10 @@ body {
 .btn-primary { color: #007aff; }
 .btn-destructive { color: #ff3b30; }
 
-.tab-bar { display: flex; border-top: 1px solid #e5e5ea; }
+.tab-bar { display: flex; border-top: 1px solid var(--border-strong); }
 .tab-btn {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: 8px 0 4px; background: none; border: none; font-size: 10px; font-weight: bold; color: #8e8e93; gap: 2px;
+  padding: 8px 0 4px; background: none; border: none; font-size: 10px; font-weight: bold; color: var(--text-secondary); gap: 2px;
 }
 .tab-btn .tab-icon { font-size: 20px; }
 .tab-btn.active { color: #007aff; }
@@ -271,6 +315,27 @@ function setAppViewportHeight() {
 setAppViewportHeight();
 window.addEventListener('resize', setAppViewportHeight);
 window.addEventListener('orientationchange', function () { setTimeout(setAppViewportHeight, 100); });
+
+// -- Dark/Light theme: an explicit toggle choice is remembered forever; before
+// any choice is made, it follows the system's color-scheme preference. --
+// (Uses the literal key string, not the THEME_KEY var declared further down,
+// since this runs before that assignment — var hoisting would otherwise make
+// THEME_KEY undefined here.)
+function loadTheme() {
+  var saved = null;
+  try { saved = window.localStorage.getItem('gymflow.theme.v1'); } catch (e) { /* ignore */ }
+  if (saved === 'light' || saved === 'dark') return saved;
+  try {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+  } catch (e) { /* ignore */ }
+  return 'light';
+}
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', theme === 'dark' ? '#000000' : '#ffffff');
+}
+applyTheme(loadTheme());
 
 window.onerror = function (msg, src, line, col, err) {
   var app = document.getElementById('app');
@@ -318,6 +383,7 @@ var NOTES_KEY = 'gymflow.notes.v1';
 var PAID_AMOUNTS_KEY = 'gymflow.paidAmounts.v1';
 var CANCELLATIONS_KEY = 'gymflow.cancellations.v1';
 var SLOTS_KEY = 'gymflow.slots.v3'; // bumped so the new 05:00-23:30 default range applies even for existing installs
+var THEME_KEY = 'gymflow.theme.v1';
 var NOTIF_MUTE_KEY = 'gymflow.notifMuted.v1';
 var ALARM_MUTE_KEY = 'gymflow.alarmMuted.v1';
 var FIRED_KEY = 'gymflow.fired.v1';
@@ -700,6 +766,7 @@ var state = {
   paidConfirmAction: null,
   paidDraftAmount: null,
   importDraft: null,
+  theme: loadTheme(),
   notificationsMuted: loadFlag(NOTIF_MUTE_KEY),
   alarmMuted: loadFlag(ALARM_MUTE_KEY),
   activeTab: 'board', // 'board' | 'payouts' | 'members'
@@ -1305,6 +1372,7 @@ function render() {
   html += '<div class="top-bar">';
   html += '  <div class="clock-box"><div class="clock-text">' + currentAthensTime() + '</div><div class="clock-label">Athens</div></div>';
   html += '  <div class="top-bar-buttons">';
+    html += '    <button class="icon-btn" id="btnTheme">' + (state.theme === 'dark' ? '☀️' : '🌙') + '</button>';
   html += '    <button class="icon-btn' + (state.notificationsMuted ? ' muted' : '') + '" id="btnNotif">' + (state.notificationsMuted ? '🔕' : '🔔') + '</button>';
   html += '    <button class="icon-btn' + (state.alarmMuted ? ' muted' : '') + '" id="btnAlarm">' + (state.alarmMuted ? '⏰🚫' : '⏰') + '</button>';
   html += '  </div>';
@@ -1342,6 +1410,12 @@ function render() {
     if (newScrollEl) newScrollEl.scrollTop = prevScrollTop;
   }
 
+  document.getElementById('btnTheme').onclick = function () {
+    state.theme = state.theme === 'dark' ? 'light' : 'dark';
+    saveFlag(THEME_KEY, state.theme); // saveFlag just does setItem(key, val); reused here for a string value
+    applyTheme(state.theme);
+    render();
+  };
   document.getElementById('btnNotif').onclick = function () {
     state.notificationsMuted = !state.notificationsMuted;
     saveFlag(NOTIF_MUTE_KEY, state.notificationsMuted);
