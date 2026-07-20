@@ -246,6 +246,9 @@ body {
 .attendance-count { font-size: 11px; color: var(--text-secondary); font-weight: bold; }
 
 .busiest-card { background: var(--bg-surface-alt); border-radius: 10px; padding: 10px 14px; margin: 0 0 8px 0; }
+.busiest-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.busiest-title-row .attendance-title { margin-bottom: 0; }
+.busiest-clear-btn { font-size: 11px; font-weight: bold; color: #ff3b30; background: none; border: none; }
 .busiest-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
 .busiest-day { width: 34px; font-family: 'LuckiestGuy'; font-weight: bold; font-size: 12px; color: var(--text-primary); flex: 0 0 auto; }
 .busiest-bar-track { flex: 1; height: 10px; background: var(--bg-track); border-radius: 5px; overflow: hidden; }
@@ -281,6 +284,7 @@ body {
   background: #1c1c1e; color: #fff; padding: 14px 16px; border-radius: 12px;
   font-weight: bold; text-align: center; z-index: 200; display: none;
   box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+  pointer-events: none; /* a toast must never block taps on whatever's under it (e.g. the tab bar) */
 }
 .toast.open { display: block; }
 
@@ -348,7 +352,7 @@ window.onerror = function (msg, src, line, col, err) {
   return false;
 };
 
-var NAMES = [
+var DEFAULT_NAMES = [
   'Χάρης (ΦΑΣΑΙΟΣ)',
   'ΜΟΝΙΚΑ (Νεζα)',
   'Γιώργος (ΒΙΚ)',
@@ -383,6 +387,7 @@ var NOTES_KEY = 'gymflow.notes.v1';
 var PAID_AMOUNTS_KEY = 'gymflow.paidAmounts.v1';
 var CANCELLATIONS_KEY = 'gymflow.cancellations.v1';
 var SLOTS_KEY = 'gymflow.slots.v3'; // bumped so the new 05:00-23:30 default range applies even for existing installs
+var MEMBERS_KEY = 'gymflow.members.v1';
 var THEME_KEY = 'gymflow.theme.v1';
 var NOTIF_MUTE_KEY = 'gymflow.notifMuted.v1';
 var ALARM_MUTE_KEY = 'gymflow.alarmMuted.v1';
@@ -425,6 +430,30 @@ var safeStorage = (function () {
 
 function loadFlag(key) { return safeStorage.getItem(key) === 'true'; }
 function saveFlag(key, val) { safeStorage.setItem(key, String(val)); }
+
+// -- Member roster (editable — starts from the default list, then whatever's
+// been added/saved takes over) --
+function saveMembers(list) { safeStorage.setItem(MEMBERS_KEY, JSON.stringify(list)); }
+function loadMembers() {
+  try {
+    var raw = safeStorage.getItem(MEMBERS_KEY);
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length) return parsed;
+    }
+  } catch (e) { /* fall through to defaults */ }
+  var d = DEFAULT_NAMES.slice();
+  saveMembers(d);
+  return d;
+}
+var NAMES = loadMembers();
+function addMember(name) {
+  name = name.trim();
+  if (!name || NAMES.indexOf(name) !== -1) return false;
+  NAMES.push(name);
+  saveMembers(NAMES);
+  return true;
+}
 
 function loadFiredSet() {
   try {
@@ -766,6 +795,9 @@ var state = {
   paidConfirmAction: null,
   paidDraftAmount: null,
   importDraft: null,
+  addMemberOpen: false,
+  addMemberError: '',
+  clearBusiestAction: null,
   theme: loadTheme(),
   notificationsMuted: loadFlag(NOTIF_MUTE_KEY),
   alarmMuted: loadFlag(ALARM_MUTE_KEY),
@@ -1095,7 +1127,7 @@ function renderStatsTab() {
   var weekdayCounts = countByWeekday(targetKey);
   var maxDayCount = Math.max.apply(null, weekdayCounts);
   html += '<div class="busiest-card">';
-  html += '  <div class="attendance-title">Busiest Days · ' + monthLabel(targetKey) + '</div>';
+  html += '  <div class="busiest-title-row"><span class="attendance-title">Busiest Days · ' + monthLabel(targetKey) + '</span><button class="busiest-clear-btn" id="btnClearBusiestNormal">Clear</button></div>';
   DAY_LABELS.forEach(function (label, i) {
     var c = weekdayCounts[i];
     var pct = maxDayCount > 0 ? (c / maxDayCount * 100) : 0;
@@ -1110,7 +1142,7 @@ function renderStatsTab() {
   var cancelledWeekdayCounts = countCancelledByWeekday(targetKey);
   var maxCancelledDayCount = Math.max.apply(null, cancelledWeekdayCounts);
   html += '<div class="busiest-card cancelled">';
-  html += '  <div class="attendance-title">Busiest Days (Cancelled) · ' + monthLabel(targetKey) + '</div>';
+  html += '  <div class="busiest-title-row"><span class="attendance-title">Busiest Days (Cancelled) · ' + monthLabel(targetKey) + '</span><button class="busiest-clear-btn" id="btnClearBusiestCancelled">Clear</button></div>';
   DAY_LABELS.forEach(function (label, i) {
     var c = cancelledWeekdayCounts[i];
     var pct = maxCancelledDayCount > 0 ? (c / maxCancelledDayCount * 100) : 0;
@@ -1132,6 +1164,66 @@ function wireStatsTab() {
   document.getElementById('btnNextStatsMonth').onclick = function () { state.statsMonthOffset++; render(); };
   var btnThisStatsMonth = document.getElementById('btnThisStatsMonth');
   if (btnThisStatsMonth) btnThisStatsMonth.onclick = function () { state.statsMonthOffset = 0; render(); };
+
+  var targetKey = monthKeyForOffset(state.statsMonthOffset);
+  document.getElementById('btnClearBusiestNormal').onclick = function () {
+    openClearBusiestModal('normal', targetKey);
+  };
+  document.getElementById('btnClearBusiestCancelled').onclick = function () {
+    openClearBusiestModal('cancelled', targetKey);
+  };
+}
+
+function openClearBusiestModal(type, monthKey) {
+  state.clearBusiestAction = { type: type, monthKey: monthKey };
+  renderClearBusiestModal();
+}
+function closeClearBusiestModal() {
+  state.clearBusiestAction = null;
+  document.getElementById('modalOverlay').classList.remove('open');
+  render();
+}
+function renderClearBusiestModal() {
+  var overlay = document.getElementById('modalOverlay');
+  var card = document.getElementById('modalCard');
+  var action = state.clearBusiestAction;
+  if (!action) { overlay.classList.remove('open'); return; }
+
+  var isNormal = action.type === 'normal';
+  var html = '<div class="modal-title">' + (isNormal ? 'Clear Busiest Days?' : 'Clear Cancelled Busiest Days?') + '</div>';
+  html += '<div style="text-align:center;font-size:13px;color:#555;margin:0 0 16px 0;line-height:1.4;">';
+  html += isNormal
+    ? 'This deletes <b>all appointments</b> for <b>' + monthLabel(action.monthKey) + '</b> — they\'ll also disappear from Payouts and Revenue for that month. This can\'t be undone.'
+    : 'This resets the cancellation history for <b>' + monthLabel(action.monthKey) + '</b>. It won\'t affect real bookings or payments.';
+  html += '</div>';
+  html += '<div class="modal-buttons"><button class="btn-text" id="btnClearBusiestCancel">Cancel</button><button class="btn-destructive" id="btnClearBusiestConfirm">Clear</button></div>';
+
+  card.innerHTML = html;
+  overlay.classList.add('open');
+
+  document.getElementById('btnClearBusiestCancel').onclick = closeClearBusiestModal;
+  document.getElementById('btnClearBusiestConfirm').onclick = function () {
+    if (isNormal) {
+      var notesChanged = false;
+      Object.keys(state.attendance).forEach(function (key) {
+        var isoDate = key.split('|')[0];
+        if (monthKeyOf(isoDate) !== action.monthKey) return;
+        delete state.attendance[key];
+        if (state.notes[key]) { delete state.notes[key]; notesChanged = true; }
+      });
+      saveAttendance(state.attendance);
+      if (notesChanged) saveNotes(state.notes);
+    } else {
+      Object.keys(state.cancellations).forEach(function (key) {
+        var isoDate = key.split('|')[0];
+        if (monthKeyOf(isoDate) !== action.monthKey) return;
+        delete state.cancellations[key];
+      });
+      saveCancellations(state.cancellations);
+    }
+    closeClearBusiestModal();
+    showToast(isNormal ? 'Busiest Days cleared' : 'Cancelled Busiest Days cleared');
+  };
 }
 
 function openPaidModal(name, monthKey) {
@@ -1236,7 +1328,8 @@ function renderPaidModal() {
 }
 
 function renderMembersTab() {
-  var html = '<div class="backup-btn-row"><button class="edit-slots-btn" id="btnExportData">⬆️ Export Backup</button><button class="edit-slots-btn" id="btnImportData">⬇️ Import Backup</button></div>';
+  var html = '<div class="edit-slots-btn-row"><button class="edit-slots-btn" id="btnAddMember">➕ Add Member</button></div>';
+  html += '<div class="backup-btn-row"><button class="edit-slots-btn" id="btnExportData">⬆️ Export Backup</button><button class="edit-slots-btn" id="btnImportData">⬇️ Import Backup</button></div>';
   html += '<div class="list-wrap"><div class="members-list"><div class="pull-indicator">⌄ Pull to refresh</div>';
   NAMES.forEach(function (name) {
     var rate = state.rates[name] || 0;
@@ -1253,9 +1346,59 @@ function wireMembersTab() {
   Array.prototype.forEach.call(document.querySelectorAll('.member-row'), function (rowEl) {
     rowEl.onclick = function () { openRateModal(rowEl.getAttribute('data-name')); };
   });
+  document.getElementById('btnAddMember').onclick = openAddMemberModal;
   document.getElementById('btnExportData').onclick = exportBackup;
   document.getElementById('btnImportData').onclick = function () {
     document.getElementById('importFileInput').click();
+  };
+}
+
+function openAddMemberModal() {
+  state.addMemberOpen = true;
+  state.addMemberError = '';
+  renderAddMemberModal();
+}
+function closeAddMemberModal() {
+  state.addMemberOpen = false;
+  state.addMemberError = '';
+  document.getElementById('modalOverlay').classList.remove('open');
+  render();
+}
+function renderAddMemberModal() {
+  var overlay = document.getElementById('modalOverlay');
+  var card = document.getElementById('modalCard');
+  if (!state.addMemberOpen) { overlay.classList.remove('open'); return; }
+
+  var html = '<div class="modal-title">Add Member</div>';
+  html += '<div class="rate-input-row"><input type="text" id="newMemberInput" placeholder="Full name" style="width:100%;font-size:16px;padding:10px;border-radius:8px;border:1px solid var(--input-border);background:var(--bg-card);color:var(--text-primary);" /></div>';
+  if (state.addMemberError) {
+    html += '<div style="text-align:center;font-size:12px;color:#ff3b30;margin:-8px 0 12px 0;">' + escapeHtml(state.addMemberError) + '</div>';
+  }
+  html += '<div class="modal-buttons"><button class="btn-text" id="btnAddMemberClose">Cancel</button><button class="btn-primary" id="btnAddMemberSave">Add</button></div>';
+
+  card.innerHTML = html;
+  overlay.classList.add('open');
+  var input = document.getElementById('newMemberInput');
+  input.focus();
+
+  document.getElementById('btnAddMemberClose').onclick = closeAddMemberModal;
+  document.getElementById('btnAddMemberSave').onclick = function () {
+    var name = document.getElementById('newMemberInput').value.trim();
+    if (!name) {
+      state.addMemberError = 'Enter a name.';
+      renderAddMemberModal();
+      return;
+    }
+    if (NAMES.indexOf(name) !== -1) {
+      state.addMemberError = 'That name already exists.';
+      renderAddMemberModal();
+      return;
+    }
+    addMember(name);
+    state.rates[name] = 0;
+    saveRates(state.rates);
+    closeAddMemberModal();
+    showToast(name + ' added');
   };
 }
 
@@ -1623,6 +1766,8 @@ document.getElementById('modalOverlay').onclick = function (e) {
   if (state.activeSlotCell) closeSlotCellModal();
   if (state.paidModalName) closePaidModal();
   if (state.importDraft) closeImportModal();
+  if (state.addMemberOpen) closeAddMemberModal();
+  if (state.clearBusiestAction) closeClearBusiestModal();
 };
 
 document.getElementById('importFileInput').onchange = function (e) {
