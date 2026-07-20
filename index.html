@@ -145,7 +145,7 @@ body {
   display: flex; align-items: center; justify-content: center; border: none;
 }
 
-.tab-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; width: 100%; min-height: 0; }
+.tab-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; width: 100%; min-height: 0; transition: opacity 180ms ease; }
 
 .edit-slots-btn-row { display: flex; justify-content: center; margin-bottom: 6px; }
 
@@ -389,7 +389,7 @@ var DEFAULT_NAMES = [
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784537546895';
+var BUILD_VERSION_LABEL = '1784537921555';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
@@ -1696,7 +1696,8 @@ function render() {
   // the whole tab from scratch — without this, that wipes the user's scroll
   // position back to the top every second while they're mid-scroll.
   var prevScrollEl = document.querySelector(SCROLLABLE_LIST_SELECTOR);
-  var prevScrollTop = (prevScrollEl && lastRenderedTab === state.activeTab) ? prevScrollEl.scrollTop : 0;
+  var tabChanged = lastRenderedTab !== state.activeTab;
+  var prevScrollTop = (prevScrollEl && !tabChanged) ? prevScrollEl.scrollTop : 0;
 
   var html = '';
   if (!safeStorage.isPersistent) {
@@ -1737,6 +1738,21 @@ function render() {
 
   app.innerHTML = html;
   lastRenderedTab = state.activeTab;
+
+  // Only fade in when the tab actually changed — everything else (booking a
+  // slot, saving a note, ticking the clock) re-renders too, and animating
+  // those would feel flickery rather than a clean page transition.
+  if (tabChanged) {
+    var newTabContent = document.querySelector('.tab-content');
+    if (newTabContent) {
+      newTabContent.style.opacity = '0';
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          newTabContent.style.opacity = '1';
+        });
+      });
+    }
+  }
 
   if (prevScrollTop) {
     var newScrollEl = document.querySelector(SCROLLABLE_LIST_SELECTOR);
@@ -2043,7 +2059,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784537546895').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784537921555').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 

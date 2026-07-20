@@ -145,7 +145,7 @@ body {
   display: flex; align-items: center; justify-content: center; border: none;
 }
 
-.tab-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; width: 100%; min-height: 0; }
+.tab-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; width: 100%; min-height: 0; transition: opacity 180ms ease; }
 
 .edit-slots-btn-row { display: flex; justify-content: center; margin-bottom: 6px; }
 
@@ -1696,7 +1696,8 @@ function render() {
   // the whole tab from scratch — without this, that wipes the user's scroll
   // position back to the top every second while they're mid-scroll.
   var prevScrollEl = document.querySelector(SCROLLABLE_LIST_SELECTOR);
-  var prevScrollTop = (prevScrollEl && lastRenderedTab === state.activeTab) ? prevScrollEl.scrollTop : 0;
+  var tabChanged = lastRenderedTab !== state.activeTab;
+  var prevScrollTop = (prevScrollEl && !tabChanged) ? prevScrollEl.scrollTop : 0;
 
   var html = '';
   if (!safeStorage.isPersistent) {
@@ -1737,6 +1738,21 @@ function render() {
 
   app.innerHTML = html;
   lastRenderedTab = state.activeTab;
+
+  // Only fade in when the tab actually changed — everything else (booking a
+  // slot, saving a note, ticking the clock) re-renders too, and animating
+  // those would feel flickery rather than a clean page transition.
+  if (tabChanged) {
+    var newTabContent = document.querySelector('.tab-content');
+    if (newTabContent) {
+      newTabContent.style.opacity = '0';
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          newTabContent.style.opacity = '1';
+        });
+      });
+    }
+  }
 
   if (prevScrollTop) {
     var newScrollEl = document.querySelector(SCROLLABLE_LIST_SELECTOR);
