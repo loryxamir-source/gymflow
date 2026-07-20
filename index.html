@@ -40,6 +40,7 @@
   --border-strong: #e5e5ea;
   --input-border: #d0d0d5;
   --muted-bg: #ffe5e5;
+  --skel-bg: #e2e2e7;
 }
 :root[data-theme="dark"] {
   --bg-page: #000000;
@@ -53,6 +54,7 @@
   --border-strong: #38383a;
   --input-border: #48484a;
   --muted-bg: #3a1f1f;
+  --skel-bg: #2c2c2e;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -67,6 +69,7 @@
     --border-strong: #38383a;
     --input-border: #48484a;
     --muted-bg: #3a1f1f;
+    --skel-bg: #2c2c2e;
   }
 }
 
@@ -112,6 +115,17 @@ body {
 }
 
 #app { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
+
+#skeleton {
+  position: fixed; inset: 0; z-index: 60; background: var(--bg-page);
+  display: flex; flex-direction: column; padding: 14px 14px 0 14px;
+  transition: opacity 300ms ease;
+}
+#skeleton.hide { opacity: 0; pointer-events: none; }
+.skel-topbar { display: flex; align-items: center; gap: 10px; }
+.skel-box { background: var(--skel-bg); border-radius: 8px; animation: skelPulse 1.1s ease-in-out infinite; }
+.skel-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+@keyframes skelPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 
 .top-bar {
   display: flex;
@@ -330,6 +344,24 @@ body {
 <body>
 <div id="bg"></div>
 <div id="app"></div>
+<div id="skeleton">
+  <div class="skel-topbar">
+    <div class="skel-box" style="width:70px;height:26px;border-radius:6px;"></div>
+    <div style="flex:1;"></div>
+    <div class="skel-box" style="width:42px;height:42px;border-radius:21px;"></div>
+    <div class="skel-box" style="width:42px;height:42px;border-radius:21px;"></div>
+    <div class="skel-box" style="width:42px;height:42px;border-radius:21px;"></div>
+  </div>
+  <div class="skel-box" style="width:150px;height:30px;border-radius:8px;margin:14px auto 8px auto;"></div>
+  <div class="skel-box" style="width:190px;height:18px;border-radius:6px;margin:0 auto 18px auto;"></div>
+  <div class="skel-row"><div class="skel-box" style="width:46px;height:36px;"></div><div class="skel-box" style="flex:1;height:36px;"></div></div>
+  <div class="skel-row"><div class="skel-box" style="width:46px;height:36px;"></div><div class="skel-box" style="flex:1;height:36px;"></div></div>
+  <div class="skel-row"><div class="skel-box" style="width:46px;height:36px;"></div><div class="skel-box" style="flex:1;height:36px;"></div></div>
+  <div class="skel-row"><div class="skel-box" style="width:46px;height:36px;"></div><div class="skel-box" style="flex:1;height:36px;"></div></div>
+  <div class="skel-row"><div class="skel-box" style="width:46px;height:36px;"></div><div class="skel-box" style="flex:1;height:36px;"></div></div>
+  <div class="skel-row"><div class="skel-box" style="width:46px;height:36px;"></div><div class="skel-box" style="flex:1;height:36px;"></div></div>
+  <div class="skel-row"><div class="skel-box" style="width:46px;height:36px;"></div><div class="skel-box" style="flex:1;height:36px;"></div></div>
+</div>
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal-card" id="modalCard"></div>
 </div>
@@ -406,7 +438,7 @@ var DEFAULT_NAMES = [
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784543841304';
+var BUILD_VERSION_LABEL = '1784544396630';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
@@ -2104,11 +2136,22 @@ if ('Notification' in window && Notification.permission === 'default') {
 
 render();
 
+// The real content above is already fully rendered by this point (everything
+// loads synchronously from localStorage) — the skeleton is a deliberate,
+// brief loading moment for a bit of polish, not masking real latency. Keep it
+// up for a beat, then fade it out to reveal the real content underneath.
+setTimeout(function () {
+  var skel = document.getElementById('skeleton');
+  if (!skel) return;
+  skel.classList.add('hide');
+  setTimeout(function () { skel.remove(); }, 320);
+}, 450);
+
 // -- Service worker: makes reopening the installed app pick up new deploys
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784543841304').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784544396630').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
