@@ -114,7 +114,7 @@ body {
    concretely-sized box. Absolute-position the scrollable list inside a
    position:relative flex:1 wrapper instead of relying on flex sizing alone. */
 .list-wrap { flex: 1; position: relative; overflow: hidden; width: 100%; min-height: 0; }
-.slot-list, .payouts-list, .members-list {
+.slot-list, .payouts-list, .members-list, .stats-tab-list {
   position: absolute; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   width: 100%; padding: 0 12px 10px 12px;
@@ -188,20 +188,20 @@ body {
 
 .revenue-card {
   display: flex; align-items: center; justify-content: space-between; background: #f2f2f7;
-  border-radius: 10px; padding: 12px 14px; margin: 0 12px 8px 12px;
+  border-radius: 10px; padding: 12px 14px; margin: 0 0 8px 0;
 }
 .revenue-label { font-size: 12px; color: #8e8e93; font-weight: bold; }
 .revenue-amount { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 20px; color: #34c759; }
 .revenue-amount .cur { font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
 
-.attendance-card { background: #f8f8fa; border-radius: 10px; padding: 10px 14px; margin: 0 12px 8px 12px; }
+.attendance-card { background: #f8f8fa; border-radius: 10px; padding: 10px 14px; margin: 0 0 8px 0; }
 .attendance-title { font-size: 12px; color: #8e8e93; font-weight: bold; margin-bottom: 6px; }
 .attendance-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
 .attendance-rank { width: 22px; font-size: 13px; font-weight: bold; text-align: center; flex: 0 0 auto; }
 .attendance-name { flex: 1; font-family: 'LuckiestGuy'; font-weight: bold; font-size: 13px; color: #1c1c1e; }
 .attendance-count { font-size: 11px; color: #8e8e93; font-weight: bold; }
 
-.busiest-card { background: #f8f8fa; border-radius: 10px; padding: 10px 14px; margin: 0 12px 8px 12px; }
+.busiest-card { background: #f8f8fa; border-radius: 10px; padding: 10px 14px; margin: 0 0 8px 0; }
 .busiest-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
 .busiest-day { width: 34px; font-family: 'LuckiestGuy'; font-weight: bold; font-size: 12px; color: #1c1c1e; flex: 0 0 auto; }
 .busiest-bar-track { flex: 1; height: 10px; background: #eceef2; border-radius: 5px; overflow: hidden; }
@@ -669,6 +669,7 @@ var state = {
   activeTab: 'board', // 'board' | 'payouts' | 'members'
   dayOffset: 0,
   payoutMonthOffset: 0,
+  statsMonthOffset: 0,
   editingRateName: null,
   rateDraftValue: null,
   rateConfirmPending: false,
@@ -876,7 +877,7 @@ function wireBoardTab() {
   });
 }
 
-function payoutMonthKeyForOffset(offset) {
+function monthKeyForOffset(offset) {
   var key = monthKeyOf(state.todayISO);
   var i;
   if (offset < 0) { for (i = 0; i > offset; i--) key = prevMonthKey(key); }
@@ -885,7 +886,7 @@ function payoutMonthKeyForOffset(offset) {
 }
 
 function renderPayoutsTab() {
-  var targetKey = payoutMonthKeyForOffset(state.payoutMonthOffset);
+  var targetKey = monthKeyForOffset(state.payoutMonthOffset);
   var monthTag = state.payoutMonthOffset === 0 ? 'This Month' : (state.payoutMonthOffset > 0 ? '+' + state.payoutMonthOffset + ' mo' : state.payoutMonthOffset + ' mo');
 
   var html = '<div class="week-bar">';
@@ -905,6 +906,58 @@ function renderPayoutsTab() {
     var balance = computeBalance(name, targetKey);
     return { name: name, count: count, rate: rate, thisMonthPaid: thisMonthPaid, balance: balance };
   });
+
+  html += '<div class="list-wrap"><div class="payouts-list"><div class="pull-indicator">⌄ Pull to refresh</div>';
+  rows.forEach(function (r) {
+    var isFullyPaid = r.balance.totalPaid > 0 && r.balance.remaining < 0.005;
+    html += '<div class="stats-row payout-row">';
+    html += '  <div><div class="stats-month">' + r.name + '</div><div class="stats-tag">' + r.count + ' session' + (r.count === 1 ? '' : 's') + ' × €' + r.rate + (r.thisMonthPaid > 0 ? ' · €' + formatMoney(r.thisMonthPaid) + ' paid' : '') + '</div></div>';
+    html += '  <div class="payout-right">';
+    html += '    <div class="stats-count"><span class="cur">€</span>' + formatMoney(r.balance.remaining) + '</div>';
+    html += '    <button class="paid-btn' + (isFullyPaid ? ' paid' : '') + '" data-name="' + r.name + '">' + (isFullyPaid ? '✓ Paid' : 'Paid') + '</button>';
+    html += '  </div>';
+    html += '</div>';
+  });
+  html += '</div></div>';
+
+  return html;
+}
+
+function wirePayoutsTab() {
+  document.getElementById('btnPrevMonth').onclick = function () { state.payoutMonthOffset--; render(); };
+  document.getElementById('btnNextMonth').onclick = function () { state.payoutMonthOffset++; render(); };
+  var btnThisMonth = document.getElementById('btnThisMonth');
+  if (btnThisMonth) btnThisMonth.onclick = function () { state.payoutMonthOffset = 0; render(); };
+
+  var targetKey = monthKeyForOffset(state.payoutMonthOffset);
+  Array.prototype.forEach.call(document.querySelectorAll('.paid-btn'), function (btn) {
+    btn.onclick = function () {
+      openPaidModal(btn.getAttribute('data-name'), targetKey);
+    };
+  });
+}
+
+function renderStatsTab() {
+  var targetKey = monthKeyForOffset(state.statsMonthOffset);
+  var monthTag = state.statsMonthOffset === 0 ? 'This Month' : (state.statsMonthOffset > 0 ? '+' + state.statsMonthOffset + ' mo' : state.statsMonthOffset + ' mo');
+
+  var html = '<div class="week-bar">';
+  html += '  <button class="week-arrow" id="btnPrevStatsMonth">‹</button>';
+  html += '  <span class="week-range-text">' + monthTag + '</span>';
+  html += '  <span class="week-dates-text">' + monthLabel(targetKey) + '</span>';
+  html += '  <button class="week-arrow" id="btnNextStatsMonth">›</button>';
+  if (state.statsMonthOffset !== 0) html += '  <button class="week-reset-text" id="btnThisStatsMonth">This Month</button>';
+  html += '</div>';
+
+  var rows = NAMES.map(function (name) {
+    return {
+      name: name,
+      count: countAttendance(name, targetKey),
+      thisMonthPaid: state.paidAmounts[paidAmountKey(name, targetKey)] || 0,
+    };
+  });
+
+  html += '<div class="list-wrap"><div class="stats-tab-list"><div class="pull-indicator">⌄ Pull to refresh</div>';
 
   var totalRevenue = rows.reduce(function (sum, r) { return sum + r.thisMonthPaid; }, 0);
   html += '<div class="revenue-card"><div class="revenue-label">Total Revenue · ' + monthLabel(targetKey) + '</div><div class="revenue-amount"><span class="cur">€</span>' + formatMoney(totalRevenue) + '</div></div>';
@@ -937,34 +990,16 @@ function renderPayoutsTab() {
   });
   html += '</div>';
 
-  html += '<div class="list-wrap"><div class="payouts-list"><div class="pull-indicator">⌄ Pull to refresh</div>';
-  rows.forEach(function (r) {
-    var isFullyPaid = r.balance.totalPaid > 0 && r.balance.remaining < 0.005;
-    html += '<div class="stats-row payout-row">';
-    html += '  <div><div class="stats-month">' + r.name + '</div><div class="stats-tag">' + r.count + ' session' + (r.count === 1 ? '' : 's') + ' × €' + r.rate + (r.thisMonthPaid > 0 ? ' · €' + formatMoney(r.thisMonthPaid) + ' paid' : '') + '</div></div>';
-    html += '  <div class="payout-right">';
-    html += '    <div class="stats-count"><span class="cur">€</span>' + formatMoney(r.balance.remaining) + '</div>';
-    html += '    <button class="paid-btn' + (isFullyPaid ? ' paid' : '') + '" data-name="' + r.name + '">' + (isFullyPaid ? '✓ Paid' : 'Paid') + '</button>';
-    html += '  </div>';
-    html += '</div>';
-  });
   html += '</div></div>';
 
   return html;
 }
 
-function wirePayoutsTab() {
-  document.getElementById('btnPrevMonth').onclick = function () { state.payoutMonthOffset--; render(); };
-  document.getElementById('btnNextMonth').onclick = function () { state.payoutMonthOffset++; render(); };
-  var btnThisMonth = document.getElementById('btnThisMonth');
-  if (btnThisMonth) btnThisMonth.onclick = function () { state.payoutMonthOffset = 0; render(); };
-
-  var targetKey = payoutMonthKeyForOffset(state.payoutMonthOffset);
-  Array.prototype.forEach.call(document.querySelectorAll('.paid-btn'), function (btn) {
-    btn.onclick = function () {
-      openPaidModal(btn.getAttribute('data-name'), targetKey);
-    };
-  });
+function wireStatsTab() {
+  document.getElementById('btnPrevStatsMonth').onclick = function () { state.statsMonthOffset--; render(); };
+  document.getElementById('btnNextStatsMonth').onclick = function () { state.statsMonthOffset++; render(); };
+  var btnThisStatsMonth = document.getElementById('btnThisStatsMonth');
+  if (btnThisStatsMonth) btnThisStatsMonth.onclick = function () { state.statsMonthOffset = 0; render(); };
 }
 
 function openPaidModal(name, monthKey) {
@@ -1187,7 +1222,7 @@ function renderImportModal() {
 }
 
 var lastRenderedTab = null;
-var SCROLLABLE_LIST_SELECTOR = '.slot-list, .payouts-list, .members-list';
+var SCROLLABLE_LIST_SELECTOR = '.slot-list, .payouts-list, .members-list, .stats-tab-list';
 
 function render() {
   var app = document.getElementById('app');
@@ -1217,7 +1252,8 @@ function render() {
   try {
     if (state.activeTab === 'board') html += renderBoardTab();
     else if (state.activeTab === 'payouts') html += renderPayoutsTab();
-    else html += renderMembersTab();
+    else if (state.activeTab === 'members') html += renderMembersTab();
+    else html += renderStatsTab();
   } catch (e) {
     tabRenderFailed = true;
     html += '<div style="padding:20px;color:#ff3b30;font-size:12px;font-weight:bold;">Couldn\'t show this tab.<br/><br/>' + (e && e.message ? e.message : String(e)) + '</div>';
@@ -1228,6 +1264,7 @@ function render() {
   html += tabButton('board', '📅', 'Board');
   html += tabButton('payouts', '💶', 'Payouts');
   html += tabButton('members', '👥', 'Members');
+  html += tabButton('stats', '📊', 'Stats');
   html += '</div>';
 
   html += '<div class="build-version">build ' + BUILD_VERSION_LABEL + '</div>';
@@ -1259,7 +1296,8 @@ function render() {
     try {
       if (state.activeTab === 'board') wireBoardTab();
       else if (state.activeTab === 'payouts') wirePayoutsTab();
-      else wireMembersTab();
+      else if (state.activeTab === 'members') wireMembersTab();
+      else wireStatsTab();
     } catch (e) {
       var tc = document.querySelector('.tab-content');
       if (tc) tc.innerHTML = '<div style="padding:20px;color:#ff3b30;font-size:12px;font-weight:bold;">Couldn\'t set up this tab.<br/><br/>' + (e && e.message ? e.message : String(e)) + '</div>';
