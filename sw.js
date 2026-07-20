@@ -1,6 +1,6 @@
-// Build version: 1784537921555 — this comment changes every build, which is
+// Build version: 1784538201687 — this comment changes every build, which is
 // what makes browsers notice this file is different and check for an update.
-var CACHE_NAME = 'gymflow-cache-1784537921555';
+var CACHE_NAME = 'gymflow-cache-1784538201687';
 
 self.addEventListener('install', function () {
   self.skipWaiting();

@@ -145,7 +145,10 @@ body {
   display: flex; align-items: center; justify-content: center; border: none;
 }
 
-.tab-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; width: 100%; min-height: 0; transition: opacity 180ms ease; }
+.tab-content {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden; width: 100%; min-height: 0;
+  transition: opacity 260ms cubic-bezier(0.22, 1, 0.36, 1), transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
 
 .edit-slots-btn-row { display: flex; justify-content: center; margin-bottom: 6px; }
 
@@ -389,7 +392,7 @@ var DEFAULT_NAMES = [
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784537921555';
+var BUILD_VERSION_LABEL = '1784538201687';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
@@ -1746,9 +1749,11 @@ function render() {
     var newTabContent = document.querySelector('.tab-content');
     if (newTabContent) {
       newTabContent.style.opacity = '0';
+      newTabContent.style.transform = 'translateY(14px) scale(0.98)';
       requestAnimationFrame(function () {
         requestAnimationFrame(function () {
           newTabContent.style.opacity = '1';
+          newTabContent.style.transform = 'translateY(0) scale(1)';
         });
       });
     }
@@ -2059,7 +2064,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784537921555').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784538201687').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
