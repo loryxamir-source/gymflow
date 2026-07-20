@@ -173,6 +173,11 @@ body {
 .edit-slots-btn-row { display: flex; justify-content: center; margin-bottom: 6px; }
 
 .daily-summary-card { background: var(--bg-surface-alt); border-radius: 10px; padding: 10px 14px; margin: 0 12px 8px 12px; }
+
+.quote-card {
+  background: var(--bg-surface); border-radius: 10px; padding: 10px 14px; margin: 0 12px 8px 12px;
+  font-size: 12px; font-weight: bold; font-style: italic; color: var(--text-primary); text-align: center; line-height: 1.4;
+}
 .daily-summary-line { font-size: 12px; color: var(--text-primary); font-weight: bold; line-height: 1.4; }
 .daily-summary-line + .daily-summary-line { margin-top: 6px; }
 .edit-slots-btn { font-size: 12px; color: #007aff; font-weight: bold; background: none; border: none; }
@@ -438,7 +443,7 @@ var DEFAULT_NAMES = [
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784544934712';
+var BUILD_VERSION_LABEL = '1784545513651';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
@@ -450,6 +455,7 @@ var NO_SHOWS_KEY = 'gymflow.noShows.v1';
 var SLOTS_KEY = 'gymflow.slots.v3'; // bumped so the new 05:00-23:30 default range applies even for existing installs
 var MEMBERS_KEY = 'gymflow.members.v1';
 var THEME_KEY = 'gymflow.theme.v1';
+var QUOTE_DISABLED_KEY = 'gymflow.quoteDisabled.v1';
 var NOTIF_MUTE_KEY = 'gymflow.notifMuted.v1';
 var ALARM_MUTE_KEY = 'gymflow.alarmMuted.v1';
 var FIRED_KEY = 'gymflow.fired.v1';
@@ -776,6 +782,39 @@ function dailySummaryText(isoDate, label) {
   return label + ' you have ' + items.length + ' appointment' + (items.length === 1 ? '' : 's') + ': ' + list;
 }
 
+// -- Motivational quote of the day (deterministic per date, so it's stable
+// all day and changes each morning when todayISO rolls over) --
+var QUOTES = [
+  'Push yourself, because no one else is going to do it for you.',
+  "The only bad workout is the one that didn't happen.",
+  "Strength doesn't come from what you can do — it comes from overcoming what you thought you couldn't.",
+  'A one-hour workout is 4% of your day. No excuses.',
+  'Discipline is choosing between what you want now and what you want most.',
+  "Your body can stand almost anything — it's your mind you have to convince.",
+  'Success starts with self-discipline.',
+  'The pain you feel today will be the strength you feel tomorrow.',
+  "Don't wish for it. Work for it.",
+  'Small progress is still progress.',
+  "You don't have to be extreme, just consistent.",
+  'Every workout counts.',
+  'Motivation gets you started. Habit keeps you going.',
+  'Wake up. Show up. Never give up.',
+  'Great things never come from comfort zones.',
+  'Your only limit is you.',
+  'Make yourself proud today.',
+  'The best project you will ever work on is you.',
+  'One more rep than yesterday.',
+  'Progress, not perfection.',
+  'Champions train. Losers complain.',
+  'It never gets easier, you just get stronger.',
+  "Today's effort is tomorrow's strength.",
+];
+function quoteOfTheDay(isoDate) {
+  var hash = 0;
+  for (var i = 0; i < isoDate.length; i++) hash = (hash * 31 + isoDate.charCodeAt(i)) >>> 0;
+  return QUOTES[hash % QUOTES.length];
+}
+
 // -- Busiest weekday (Mon..Sun), across all members, for the given month --
 function countByWeekday(monthKey) {
   var counts = [0, 0, 0, 0, 0, 0, 0]; // index 0 = Mon ... 6 = Sun
@@ -921,6 +960,7 @@ var state = {
   addMemberError: '',
   clearBusiestAction: null,
   theme: loadTheme(),
+  quoteDisabled: loadFlag(QUOTE_DISABLED_KEY),
   notificationsMuted: loadFlag(NOTIF_MUTE_KEY),
   alarmMuted: loadFlag(ALARM_MUTE_KEY),
   activeTab: 'board', // 'board' | 'payouts' | 'members'
@@ -1140,6 +1180,10 @@ function renderBoardTab() {
   html += '  <button class="week-arrow" id="btnNextDay">›</button>';
   if (state.dayOffset !== 0) html += '  <button class="week-reset-text" id="btnToday">Today</button>';
   html += '</div>';
+
+  if (!state.quoteDisabled) {
+    html += '<div class="quote-card">✨ ' + escapeHtml(quoteOfTheDay(state.todayISO)) + '</div>';
+  }
 
   var tomorrowISO = formatISODate(addDays(parseISODate(state.todayISO), 1));
   html += '<div class="daily-summary-card">';
@@ -1768,6 +1812,7 @@ function render() {
     html += '    <button class="icon-btn" id="btnTheme">' + (state.theme === 'dark' ? '☀️' : '🌙') + '</button>';
   html += '    <button class="icon-btn' + (state.notificationsMuted ? ' muted' : '') + '" id="btnNotif">' + (state.notificationsMuted ? '🔕' : '🔔') + '</button>';
   html += '    <button class="icon-btn' + (state.alarmMuted ? ' muted' : '') + '" id="btnAlarm">' + (state.alarmMuted ? '⏰🚫' : '⏰') + '</button>';
+  html += '    <button class="icon-btn' + (state.quoteDisabled ? ' muted' : '') + '" id="btnQuote" title="Toggle daily quote">✨</button>';
   html += '  </div>';
   html += '</div>';
 
@@ -1854,6 +1899,11 @@ function render() {
   document.getElementById('btnAlarm').onclick = function () {
     state.alarmMuted = !state.alarmMuted;
     saveFlag(ALARM_MUTE_KEY, state.alarmMuted);
+    render();
+  };
+  document.getElementById('btnQuote').onclick = function () {
+    state.quoteDisabled = !state.quoteDisabled;
+    saveFlag(QUOTE_DISABLED_KEY, state.quoteDisabled);
     render();
   };
 
@@ -2151,7 +2201,7 @@ setTimeout(function () {
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784544934712').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784545513651').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
