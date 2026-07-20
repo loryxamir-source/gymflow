@@ -389,7 +389,7 @@ var DEFAULT_NAMES = [
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784537193246';
+var BUILD_VERSION_LABEL = '1784537546895';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
@@ -692,6 +692,10 @@ function countAttendance(name, monthKey) {
     // Only sessions that have already happened count toward payouts — a slot
     // booked for later today or a future date isn't owed yet.
     if (!isCompleted(isoDate, slot, state.todayISO, state.nowHHMM)) return;
+    // A no-show didn't actually happen, so it shouldn't be charged for or
+    // counted as attendance anywhere this figure is used (Payouts, running
+    // balance, the board's own session tag, or the Most Frequent leaderboard).
+    if (state.noShows[key]) return;
     count++;
   });
   return count;
@@ -2039,7 +2043,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784537193246').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784537546895').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 

@@ -692,6 +692,10 @@ function countAttendance(name, monthKey) {
     // Only sessions that have already happened count toward payouts — a slot
     // booked for later today or a future date isn't owed yet.
     if (!isCompleted(isoDate, slot, state.todayISO, state.nowHHMM)) return;
+    // A no-show didn't actually happen, so it shouldn't be charged for or
+    // counted as attendance anywhere this figure is used (Payouts, running
+    // balance, the board's own session tag, or the Most Frequent leaderboard).
+    if (state.noShows[key]) return;
     count++;
   });
   return count;
