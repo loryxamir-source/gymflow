@@ -21,6 +21,12 @@
   font-weight: normal;
   font-style: normal;
 }
+@font-face {
+  font-family: 'Roboto';
+  src: url(data:font/ttf;base64,{{ROBOTO_BASE64}}) format('truetype');
+  font-weight: bold;
+  font-style: normal;
+}
 
 :root {
   --bg-page: #ffffff;
@@ -185,7 +191,7 @@ body {
 .slot-time { width: 46px; font-family: 'LuckiestGuy'; font-weight: bold; font-size: 12px; color: var(--text-primary); flex: 0 0 auto; }
 .slot-cell {
   flex: 1; min-width: 0; padding: 10px 8px; border-radius: 8px; background: var(--bg-surface); border: none;
-  font-family: 'LuckiestGuy'; font-weight: bold; font-size: 11px; color: var(--text-secondary); text-align: center;
+  font-family: 'Roboto', -apple-system, sans-serif; font-weight: bold; font-size: 11px; color: var(--text-secondary); text-align: center;
 }
 .slot-cell.filled { background: #007aff; color: #fff; }
 .slot-cell.completed { background: #34c759; color: #fff; }
@@ -193,7 +199,7 @@ body {
 .member-toggle-list { max-height: 46vh; overflow-y: auto; -webkit-overflow-scrolling: touch; margin-bottom: 8px; }
 .member-toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 6px; border-bottom: 1px solid var(--border-color); }
 .member-toggle-row:last-child { border-bottom: none; }
-.member-toggle-name { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 14px; color: var(--text-primary); }
+.member-toggle-name { font-family: 'Roboto', -apple-system, sans-serif; font-weight: bold; font-size: 14px; color: var(--text-primary); }
 .member-toggle-check { font-size: 18px; font-weight: bold; color: #007aff; width: 24px; text-align: center; }
 
 .member-note-row {
@@ -240,7 +246,7 @@ body {
 .stats-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 4px; border-bottom: 1px solid var(--border-color); }
 .stats-row:last-child { border-bottom: none; margin-bottom: 4px; }
 .stats-row.member-row { cursor: pointer; }
-.stats-month { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 13px; color: var(--text-primary); }
+.stats-month { font-family: 'Roboto', -apple-system, sans-serif; font-weight: bold; font-size: 13px; color: var(--text-primary); }
 .stats-tag { font-size: 10px; color: var(--text-secondary); font-weight: bold; margin-top: 1px; }
 .stats-count { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 18px; color: #007aff; }
 .stats-count .cur { font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
@@ -256,7 +262,7 @@ body {
 .attendance-title { font-size: 12px; color: var(--text-secondary); font-weight: bold; margin-bottom: 6px; }
 .attendance-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
 .attendance-rank { width: 22px; font-size: 13px; font-weight: bold; text-align: center; flex: 0 0 auto; }
-.attendance-name { flex: 1; font-family: 'LuckiestGuy'; font-weight: bold; font-size: 13px; color: var(--text-primary); }
+.attendance-name { flex: 1; font-family: 'Roboto', -apple-system, sans-serif; font-weight: bold; font-size: 13px; color: var(--text-primary); }
 .attendance-count { font-size: 11px; color: var(--text-secondary); font-weight: bold; }
 .noshow-card .attendance-count { color: #ff3b30; }
 
