@@ -237,14 +237,6 @@ body {
 }
 .paid-btn.paid { background: #34c759; color: #fff; }
 
-.revenue-card {
-  display: flex; align-items: center; justify-content: space-between; background: var(--bg-surface);
-  border-radius: 10px; padding: 12px 14px; margin: 0 0 8px 0;
-}
-.revenue-label { font-size: 12px; color: var(--text-secondary); font-weight: bold; }
-.revenue-amount { font-family: 'LuckiestGuy'; font-weight: bold; font-size: 20px; color: #34c759; }
-.revenue-amount .cur { font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-
 .attendance-card { background: var(--bg-surface-alt); border-radius: 10px; padding: 10px 14px; margin: 0 0 8px 0; }
 .attendance-title { font-size: 12px; color: var(--text-secondary); font-weight: bold; margin-bottom: 6px; }
 .attendance-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
@@ -1075,6 +1067,8 @@ function renderPayoutsTab() {
   if (state.payoutMonthOffset !== 0) html += '  <button class="week-reset-text" id="btnThisMonth">This Month</button>';
   html += '</div>';
 
+  html += '<div class="search-box-row"><input type="text" id="payoutSearchInput" placeholder="🔍 Search members…" /></div>';
+
   var rows = NAMES.map(function (name) {
     var count = countAttendance(name, targetKey);
     var rate = state.rates[name] || 0;
@@ -1088,7 +1082,7 @@ function renderPayoutsTab() {
   html += '<div class="list-wrap"><div class="payouts-list"><div class="pull-indicator">⌄ Pull to refresh</div>';
   rows.forEach(function (r) {
     var isFullyPaid = r.balance.totalPaid > 0 && r.balance.remaining < 0.005;
-    html += '<div class="stats-row payout-row">';
+    html += '<div class="stats-row payout-row" data-name="' + r.name + '">';
     html += '  <div><div class="stats-month">' + r.name + '</div><div class="stats-tag">' + r.count + ' session' + (r.count === 1 ? '' : 's') + ' × €' + r.rate + (r.thisMonthPaid > 0 ? ' · €' + formatMoney(r.thisMonthPaid) + ' paid' : '') + '</div></div>';
     html += '  <div class="payout-right">';
     html += '    <div class="stats-count"><span class="cur">€</span>' + formatMoney(r.balance.remaining) + '</div>';
@@ -1106,6 +1100,17 @@ function wirePayoutsTab() {
   document.getElementById('btnNextMonth').onclick = function () { state.payoutMonthOffset++; render(); };
   var btnThisMonth = document.getElementById('btnThisMonth');
   if (btnThisMonth) btnThisMonth.onclick = function () { state.payoutMonthOffset = 0; render(); };
+
+  var payoutSearchInput = document.getElementById('payoutSearchInput');
+  if (payoutSearchInput) {
+    payoutSearchInput.addEventListener('input', function () {
+      var q = payoutSearchInput.value.trim().toLowerCase();
+      Array.prototype.forEach.call(document.querySelectorAll('.payout-row'), function (rowEl) {
+        var name = (rowEl.getAttribute('data-name') || '').toLowerCase();
+        rowEl.style.display = (!q || name.indexOf(q) !== -1) ? '' : 'none';
+      });
+    });
+  }
 
   var targetKey = monthKeyForOffset(state.payoutMonthOffset);
   Array.prototype.forEach.call(document.querySelectorAll('.paid-btn'), function (btn) {
@@ -1131,14 +1136,10 @@ function renderStatsTab() {
     return {
       name: name,
       count: countAttendance(name, targetKey),
-      thisMonthPaid: state.paidAmounts[paidAmountKey(name, targetKey)] || 0,
     };
   });
 
   html += '<div class="list-wrap"><div class="stats-tab-list"><div class="pull-indicator">⌄ Pull to refresh</div>';
-
-  var totalRevenue = rows.reduce(function (sum, r) { return sum + r.thisMonthPaid; }, 0);
-  html += '<div class="revenue-card"><div class="revenue-label">Total Revenue · ' + monthLabel(targetKey) + '</div><div class="revenue-amount"><span class="cur">€</span>' + formatMoney(totalRevenue) + '</div></div>';
 
   var ranked = rows.slice().sort(function (a, b) { return b.count - a.count; });
   var medals = ['🥇', '🥈', '🥉'];
