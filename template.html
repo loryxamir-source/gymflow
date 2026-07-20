@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="GymFlow" />
+<meta name="apple-mobile-web-app-title" content="GYMTOK" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="theme-color" content="#ffffff" />
 <link rel="apple-touch-icon" href="data:image/png;base64,{{ICON_BASE64}}" />
@@ -13,7 +13,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>GymFlow</title>
+<title>GYMTOK</title>
 <style>
 @font-face {
   font-family: 'LuckiestGuy';
@@ -25,6 +25,14 @@
   font-family: 'Roboto';
   src: url(data:font/ttf;base64,{{ROBOTO_BASE64}}) format('truetype');
   font-weight: bold;
+  font-style: normal;
+}
+@font-face {
+  /* Komika Axis is a paid commercial font, not freely licensed — Bangers (free,
+     Google Fonts) is used here instead as a similar bold comic-book lookalike. */
+  font-family: 'Bangers';
+  src: url(data:font/ttf;base64,{{BANGERS_BASE64}}) format('truetype');
+  font-weight: normal;
   font-style: normal;
 }
 
@@ -149,6 +157,11 @@ body {
 .title {
   font-family: 'LuckiestGuy'; font-weight: bold; font-size: 28px;
   text-align: center; margin: 12px 0 4px 0; color: var(--text-primary);
+}
+
+.coupon-line {
+  font-family: 'Bangers'; font-size: 13px; letter-spacing: 0.5px;
+  text-align: center; margin: 0 0 8px 0; color: var(--text-secondary);
 }
 
 .week-bar {
@@ -1603,7 +1616,7 @@ function buildPayoutsReportJpeg(year, rows) {
 
   ctx.fillStyle = '#1c1c1e';
   ctx.font = 'bold 20px -apple-system, sans-serif';
-  ctx.fillText('GymFlow — Payouts Report — ' + year, 30, 40);
+  ctx.fillText('GYMTOK — Payouts Report — ' + year, 30, 40);
   ctx.font = '11px -apple-system, sans-serif';
   ctx.fillStyle = '#666';
   ctx.fillText('Generated ' + new Date().toLocaleString(), 30, 60);
@@ -1741,7 +1754,8 @@ function render() {
   html += '  </div>';
   html += '</div>';
 
-  html += '<div class="title">GymFlow</div>';
+  html += '<div class="title">GYMTOK</div>';
+  html += '<div class="coupon-line">Prozis Coupon: LACTA10</div>';
 
   html += '<div class="tab-content">';
   var tabRenderFailed = false;
