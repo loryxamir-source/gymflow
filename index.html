@@ -303,10 +303,6 @@ body {
 .busiest-bar-fill { height: 100%; background: #007aff; border-radius: 5px; }
 .busiest-row.busiest-max .busiest-bar-fill { background: #ff9500; }
 .busiest-row.busiest-max .busiest-day { color: #ff9500; }
-
-.busiest-card.cancelled .busiest-bar-fill { background: #ff3b30; }
-.busiest-card.cancelled .busiest-row.busiest-max .busiest-bar-fill { background: #b0201a; }
-.busiest-card.cancelled .busiest-row.busiest-max .busiest-day { color: #b0201a; }
 .busiest-count { width: 20px; text-align: right; font-size: 11px; color: var(--text-secondary); font-weight: bold; }
 
 .rate-input-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 14px; }
@@ -443,14 +439,13 @@ var DEFAULT_NAMES = [
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784545513651';
+var BUILD_VERSION_LABEL = '1784546588934';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
 var RATES_KEY = 'gymflow.rates.v1';
 var NOTES_KEY = 'gymflow.notes.v1';
 var PAID_AMOUNTS_KEY = 'gymflow.paidAmounts.v1';
-var CANCELLATIONS_KEY = 'gymflow.cancellations.v1';
 var NO_SHOWS_KEY = 'gymflow.noShows.v1';
 var SLOTS_KEY = 'gymflow.slots.v3'; // bumped so the new 05:00-23:30 default range applies even for existing installs
 var MEMBERS_KEY = 'gymflow.members.v1';
@@ -609,21 +604,6 @@ function loadPaidAmounts() {
   return {};
 }
 function savePaidAmounts(paidAmounts) { safeStorage.setItem(PAID_AMOUNTS_KEY, JSON.stringify(paidAmounts)); }
-
-// -- Cancellations (isoDate|slot|name -> cumulative count). Recorded only when
-// an appointment that was actually saved/booked gets removed — used for the
-// separate "Busiest Days (Cancelled)" stat, kept apart from normal attendance. --
-function loadCancellations() {
-  try {
-    var raw = safeStorage.getItem(CANCELLATIONS_KEY);
-    if (raw) {
-      var parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') return parsed;
-    }
-  } catch (e) { /* fall through */ }
-  return {};
-}
-function saveCancellations(cancellations) { safeStorage.setItem(CANCELLATIONS_KEY, JSON.stringify(cancellations)); }
 
 // -- No-shows (isoDate|slot|name -> true). Marked on a booked appointment that
 // the person didn't actually attend, tracked separately per person for Stats. --
@@ -830,21 +810,6 @@ function countByWeekday(monthKey) {
   return counts;
 }
 
-// -- Busiest weekday for CANCELLED appointments only, kept separate from the
-// normal attendance-based Busiest Days above. --
-function countCancelledByWeekday(monthKey) {
-  var counts = [0, 0, 0, 0, 0, 0, 0];
-  Object.keys(state.cancellations).forEach(function (key) {
-    var n = state.cancellations[key];
-    if (!n) return;
-    var isoDate = key.split('|')[0];
-    if (monthKeyOf(isoDate) !== monthKey) return;
-    var dow = parseISODate(isoDate).getDay();
-    counts[(dow + 6) % 7] += n;
-  });
-  return counts;
-}
-
 // -- Running balance (so an overpayment this month carries forward and
 // reduces what's owed next month, instead of just being discarded) --
 function monthKeysWithActivity(name, upToMonthKey) {
@@ -950,7 +915,6 @@ var state = {
   rates: loadRates(),
   notes: loadNotes(),
   paidAmounts: loadPaidAmounts(),
-  cancellations: loadCancellations(),
   noShows: loadNoShows(),
   paidModalName: null,
   paidModalMonthKey: null,
@@ -1134,7 +1098,6 @@ function renderSlotCellModal() {
     };
   });
   document.getElementById('btnSlotCellSave').onclick = function () {
-    var cancellationsChanged = false;
     var addedNewBooking = false;
     NAMES.forEach(function (name) {
       var key = attendKey(cell.isoDate, cell.slot, name);
@@ -1146,17 +1109,9 @@ function renderSlotCellModal() {
         delete state.attendance[key];
         if (state.notes[key]) { delete state.notes[key]; saveNotes(state.notes); }
         if (state.noShows[key]) { delete state.noShows[key]; saveNoShows(state.noShows); }
-        // Only counts as a cancellation if it was an actual saved appointment
-        // being removed, not a checkbox that was toggled on/off in this same
-        // not-yet-saved session without ever being booked.
-        if (wasBooked) {
-          state.cancellations[key] = (state.cancellations[key] || 0) + 1;
-          cancellationsChanged = true;
-        }
       }
     });
     saveAttendance(state.attendance);
-    if (cancellationsChanged) saveCancellations(state.cancellations);
     if (addedNewBooking) pendingPopCell = { isoDate: cell.isoDate, slot: cell.slot };
     closeSlotCellModal();
   };
@@ -1354,21 +1309,6 @@ function renderStatsTab() {
   });
   html += '</div>';
 
-  var cancelledWeekdayCounts = countCancelledByWeekday(targetKey);
-  var maxCancelledDayCount = Math.max.apply(null, cancelledWeekdayCounts);
-  html += '<div class="busiest-card cancelled">';
-  html += '  <div class="busiest-title-row"><span class="attendance-title">Busiest Days (Cancelled) · ' + monthLabel(targetKey) + '</span><button class="busiest-clear-btn" id="btnClearBusiestCancelled">Clear</button></div>';
-  DAY_LABELS.forEach(function (label, i) {
-    var c = cancelledWeekdayCounts[i];
-    var pct = maxCancelledDayCount > 0 ? (c / maxCancelledDayCount * 100) : 0;
-    html += '  <div class="busiest-row' + (maxCancelledDayCount > 0 && c === maxCancelledDayCount ? ' busiest-max' : '') + '">';
-    html += '    <span class="busiest-day">' + label + '</span>';
-    html += '    <div class="busiest-bar-track"><div class="busiest-bar-fill" style="width:' + pct + '%"></div></div>';
-    html += '    <span class="busiest-count">' + c + '</span>';
-    html += '  </div>';
-  });
-  html += '</div>';
-
   var noShowRows = NAMES.map(function (name) {
     return { name: name, count: countNoShows(name, targetKey) };
   }).sort(function (a, b) { return b.count - a.count; });
@@ -1396,15 +1336,12 @@ function wireStatsTab() {
 
   var targetKey = monthKeyForOffset(state.statsMonthOffset);
   document.getElementById('btnClearBusiestNormal').onclick = function () {
-    openClearBusiestModal('normal', targetKey);
-  };
-  document.getElementById('btnClearBusiestCancelled').onclick = function () {
-    openClearBusiestModal('cancelled', targetKey);
+    openClearBusiestModal(targetKey);
   };
 }
 
-function openClearBusiestModal(type, monthKey) {
-  state.clearBusiestAction = { type: type, monthKey: monthKey };
+function openClearBusiestModal(monthKey) {
+  state.clearBusiestAction = { monthKey: monthKey };
   renderClearBusiestModal();
 }
 function closeClearBusiestModal() {
@@ -1418,12 +1355,9 @@ function renderClearBusiestModal() {
   var action = state.clearBusiestAction;
   if (!action) { overlay.classList.remove('open'); return; }
 
-  var isNormal = action.type === 'normal';
-  var html = '<div class="modal-title">' + (isNormal ? 'Clear Busiest Days?' : 'Clear Cancelled Busiest Days?') + '</div>';
+  var html = '<div class="modal-title">Clear Busiest Days?</div>';
   html += '<div style="text-align:center;font-size:13px;color:#555;margin:0 0 16px 0;line-height:1.4;">';
-  html += isNormal
-    ? 'This deletes <b>all appointments</b> for <b>' + monthLabel(action.monthKey) + '</b> — they\'ll also disappear from Payouts and Revenue for that month. This can\'t be undone.'
-    : 'This resets the cancellation history for <b>' + monthLabel(action.monthKey) + '</b>. It won\'t affect real bookings or payments.';
+  html += 'This deletes <b>all appointments</b> for <b>' + monthLabel(action.monthKey) + '</b> — they\'ll also disappear from Payouts and Revenue for that month. This can\'t be undone.';
   html += '</div>';
   html += '<div class="modal-buttons"><button class="btn-text" id="btnClearBusiestCancel">Cancel</button><button class="btn-destructive" id="btnClearBusiestConfirm">Clear</button></div>';
 
@@ -1432,26 +1366,17 @@ function renderClearBusiestModal() {
 
   document.getElementById('btnClearBusiestCancel').onclick = closeClearBusiestModal;
   document.getElementById('btnClearBusiestConfirm').onclick = function () {
-    if (isNormal) {
-      var notesChanged = false;
-      Object.keys(state.attendance).forEach(function (key) {
-        var isoDate = key.split('|')[0];
-        if (monthKeyOf(isoDate) !== action.monthKey) return;
-        delete state.attendance[key];
-        if (state.notes[key]) { delete state.notes[key]; notesChanged = true; }
-      });
-      saveAttendance(state.attendance);
-      if (notesChanged) saveNotes(state.notes);
-    } else {
-      Object.keys(state.cancellations).forEach(function (key) {
-        var isoDate = key.split('|')[0];
-        if (monthKeyOf(isoDate) !== action.monthKey) return;
-        delete state.cancellations[key];
-      });
-      saveCancellations(state.cancellations);
-    }
+    var notesChanged = false;
+    Object.keys(state.attendance).forEach(function (key) {
+      var isoDate = key.split('|')[0];
+      if (monthKeyOf(isoDate) !== action.monthKey) return;
+      delete state.attendance[key];
+      if (state.notes[key]) { delete state.notes[key]; notesChanged = true; }
+    });
+    saveAttendance(state.attendance);
+    if (notesChanged) saveNotes(state.notes);
     closeClearBusiestModal();
-    showToast(isNormal ? 'Busiest Days cleared' : 'Cancelled Busiest Days cleared');
+    showToast('Busiest Days cleared');
   };
 }
 
@@ -2201,7 +2126,7 @@ setTimeout(function () {
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784545513651').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784546588934').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
