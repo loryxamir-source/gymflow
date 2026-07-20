@@ -448,16 +448,19 @@ function saveFlag(key, val) { safeStorage.setItem(key, String(val)); }
 
 // -- Member roster (editable — starts from the default list, then whatever's
 // been added/saved takes over) --
+function sortNames(arr) {
+  return arr.sort(function (a, b) { return a.localeCompare(b, 'el', { sensitivity: 'base' }); });
+}
 function saveMembers(list) { safeStorage.setItem(MEMBERS_KEY, JSON.stringify(list)); }
 function loadMembers() {
   try {
     var raw = safeStorage.getItem(MEMBERS_KEY);
     if (raw) {
       var parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length) return parsed;
+      if (Array.isArray(parsed) && parsed.length) return sortNames(parsed);
     }
   } catch (e) { /* fall through to defaults */ }
-  var d = DEFAULT_NAMES.slice();
+  var d = sortNames(DEFAULT_NAMES.slice());
   saveMembers(d);
   return d;
 }
@@ -466,6 +469,7 @@ function addMember(name) {
   name = name.trim();
   if (!name || NAMES.indexOf(name) !== -1) return false;
   NAMES.push(name);
+  sortNames(NAMES);
   saveMembers(NAMES);
   return true;
 }
