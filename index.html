@@ -196,6 +196,14 @@ body {
 .slot-cell.filled { background: #007aff; color: #fff; }
 .slot-cell.completed { background: #34c759; color: #fff; }
 
+@keyframes cellPop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.12); }
+  75% { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+.cell-pop { animation: cellPop 380ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+
 .member-toggle-list { max-height: 46vh; overflow-y: auto; -webkit-overflow-scrolling: touch; margin-bottom: 8px; }
 .member-toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 6px; border-bottom: 1px solid var(--border-color); }
 .member-toggle-row:last-child { border-bottom: none; }
@@ -398,7 +406,7 @@ var DEFAULT_NAMES = [
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784542975214';
+var BUILD_VERSION_LABEL = '1784543419772';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
@@ -1055,10 +1063,12 @@ function renderSlotCellModal() {
   });
   document.getElementById('btnSlotCellSave').onclick = function () {
     var cancellationsChanged = false;
+    var addedNewBooking = false;
     NAMES.forEach(function (name) {
       var key = attendKey(cell.isoDate, cell.slot, name);
       var wasBooked = !!state.slotCellOriginal[name];
       if (state.slotCellDraft[name]) {
+        if (!wasBooked) addedNewBooking = true;
         state.attendance[key] = true;
       } else {
         delete state.attendance[key];
@@ -1075,6 +1085,7 @@ function renderSlotCellModal() {
     });
     saveAttendance(state.attendance);
     if (cancellationsChanged) saveCancellations(state.cancellations);
+    if (addedNewBooking) pendingPopCell = { isoDate: cell.isoDate, slot: cell.slot };
     closeSlotCellModal();
   };
 }
@@ -1701,6 +1712,7 @@ function exportPayoutsPdf() {
 
 var lastRenderedTab = null;
 var SCROLLABLE_LIST_SELECTOR = '.slot-list, .payouts-list, .members-list, .stats-tab-list';
+var pendingPopCell = null; // { isoDate, slot } — set right before a save that added a new booking
 
 function render() {
   var app = document.getElementById('app');
@@ -1772,6 +1784,19 @@ function render() {
   if (prevScrollTop) {
     var newScrollEl = document.querySelector(SCROLLABLE_LIST_SELECTOR);
     if (newScrollEl) newScrollEl.scrollTop = prevScrollTop;
+  }
+
+  if (pendingPopCell && state.activeTab === 'board') {
+    var popTarget = document.querySelector(
+      '.slot-cell[data-day="' + pendingPopCell.isoDate + '"][data-slot="' + pendingPopCell.slot + '"]'
+    );
+    if (popTarget) {
+      popTarget.classList.add('cell-pop');
+      popTarget.addEventListener('animationend', function () {
+        popTarget.classList.remove('cell-pop');
+      }, { once: true });
+    }
+    pendingPopCell = null;
   }
 
   document.getElementById('btnTheme').onclick = function () {
@@ -2074,7 +2099,7 @@ render();
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784542975214').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784543419772').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
