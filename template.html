@@ -150,7 +150,6 @@ body {
 .edit-slots-btn-row { display: flex; justify-content: center; margin-bottom: 6px; }
 .edit-slots-btn { font-size: 12px; color: #007aff; font-weight: bold; background: none; border: none; }
 
-.backup-btn-row { display: flex; justify-content: center; gap: 20px; margin-bottom: 6px; }
 
 .search-box-row { padding: 0 12px 8px 12px; }
 .search-box-row input {
@@ -304,7 +303,6 @@ body {
   <div class="modal-card" id="modalCard"></div>
 </div>
 <div class="toast" id="toast"></div>
-<input type="file" id="importFileInput" accept="application/json,.json" style="display:none" />
 
 <script>
 'use strict';
@@ -803,7 +801,6 @@ var state = {
   paidModalMonthKey: null,
   paidConfirmAction: null,
   paidDraftAmount: null,
-  importDraft: null,
   addMemberOpen: false,
   addMemberError: '',
   clearBusiestAction: null,
@@ -1067,6 +1064,7 @@ function renderPayoutsTab() {
   if (state.payoutMonthOffset !== 0) html += '  <button class="week-reset-text" id="btnThisMonth">This Month</button>';
   html += '</div>';
 
+  html += '<div class="edit-slots-btn-row"><button class="edit-slots-btn" id="btnExportPayoutsPdf">⬆️ Export Payouts PDF (' + monthKeyOf(state.todayISO).split('-')[0] + ')</button></div>';
   html += '<div class="search-box-row"><input type="text" id="payoutSearchInput" placeholder="🔍 Search members…" /></div>';
 
   var rows = NAMES.map(function (name) {
@@ -1100,6 +1098,7 @@ function wirePayoutsTab() {
   document.getElementById('btnNextMonth').onclick = function () { state.payoutMonthOffset++; render(); };
   var btnThisMonth = document.getElementById('btnThisMonth');
   if (btnThisMonth) btnThisMonth.onclick = function () { state.payoutMonthOffset = 0; render(); };
+  document.getElementById('btnExportPayoutsPdf').onclick = exportPayoutsPdf;
 
   var payoutSearchInput = document.getElementById('payoutSearchInput');
   if (payoutSearchInput) {
@@ -1359,7 +1358,6 @@ function renderPaidModal() {
 
 function renderMembersTab() {
   var html = '<div class="edit-slots-btn-row"><button class="edit-slots-btn" id="btnAddMember">➕ Add Member</button></div>';
-  html += '<div class="backup-btn-row"><button class="edit-slots-btn" id="btnExportData">⬆️ Export Backup</button><button class="edit-slots-btn" id="btnImportData">⬇️ Import Backup</button></div>';
   html += '<div class="search-box-row"><input type="text" id="memberSearchInput" placeholder="🔍 Search members…" /></div>';
   html += '<div class="list-wrap"><div class="members-list"><div class="pull-indicator">⌄ Pull to refresh</div>';
   NAMES.forEach(function (name) {
@@ -1391,10 +1389,6 @@ function wireMembersTab() {
     rowEl.onclick = function () { openRateModal(rowEl.getAttribute('data-name')); };
   });
   document.getElementById('btnAddMember').onclick = openAddMemberModal;
-  document.getElementById('btnExportData').onclick = exportBackup;
-  document.getElementById('btnImportData').onclick = function () {
-    document.getElementById('importFileInput').click();
-  };
 }
 
 function openAddMemberModal() {
@@ -1446,98 +1440,150 @@ function renderAddMemberModal() {
   };
 }
 
-// -- Backup export/import (JSON file, for moving data to a new phone) --
-function exportBackup() {
-  var payload = {
-    app: 'gymflow',
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    slots: state.slots,
-    rates: state.rates,
-    attendance: state.attendance,
-    notes: state.notes,
-    paidAmounts: state.paidAmounts,
-  };
-  var json = JSON.stringify(payload, null, 2);
-  var blob = new Blob([json], { type: 'application/json' });
+// -- Payouts PDF export (current calendar year, per member: sessions, rate,
+// owed, paid, remaining). Member names are Greek, and the standard PDF base
+// fonts (Helvetica etc.) can't render Greek glyphs without full font
+// embedding — so instead of drawing PDF text operators directly, the report
+// is rendered to a <canvas> (whose text rendering goes through the OS font
+// stack and handles Greek natively), exported as a JPEG, and embedded as a
+// single full-page image in a hand-built minimal PDF (DCTDecode is just
+// JPEG bytes, so no PDF library is needed). --
+function computeYearlyPayoutRows(year) {
+  return NAMES.map(function (name) {
+    var rate = state.rates[name] || 0;
+    var sessions = 0, paid = 0;
+    for (var m = 1; m <= 12; m++) {
+      var mk = year + '-' + pad(m);
+      sessions += countAttendance(name, mk);
+      paid += state.paidAmounts[paidAmountKey(name, mk)] || 0;
+    }
+    var owed = sessions * rate;
+    var remaining = Math.max(owed - paid, 0);
+    return { name: name, sessions: sessions, rate: rate, owed: owed, paid: paid, remaining: remaining };
+  });
+}
+
+function buildPayoutsReportJpeg(year, rows) {
+  var scale = 2;
+  var pageW = 850, rowH = 26, headerH = 130, footerH = 20;
+  var pageH = headerH + Math.max(rows.length, 1) * rowH + footerH;
+
+  var canvas = document.createElement('canvas');
+  canvas.width = pageW * scale;
+  canvas.height = pageH * scale;
+  var ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, pageW, pageH);
+
+  ctx.fillStyle = '#1c1c1e';
+  ctx.font = 'bold 20px -apple-system, sans-serif';
+  ctx.fillText('GymFlow — Payouts Report — ' + year, 30, 40);
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.fillStyle = '#666';
+  ctx.fillText('Generated ' + new Date().toLocaleString(), 30, 60);
+
+  var cols = { name: 30, sessions: 380, rate: 460, owed: 540, paid: 630, remaining: 720 };
+  var headerY = 95;
+  ctx.font = 'bold 12px -apple-system, sans-serif';
+  ctx.fillStyle = '#1c1c1e';
+  ctx.fillText('Name', cols.name, headerY);
+  ctx.fillText('Sessions', cols.sessions, headerY);
+  ctx.fillText('Rate', cols.rate, headerY);
+  ctx.fillText('Owed', cols.owed, headerY);
+  ctx.fillText('Paid', cols.paid, headerY);
+  ctx.fillText('Remaining', cols.remaining, headerY);
+  ctx.strokeStyle = '#ccc';
+  ctx.beginPath(); ctx.moveTo(30, headerY + 8); ctx.lineTo(pageW - 30, headerY + 8); ctx.stroke();
+
+  ctx.font = '12px -apple-system, sans-serif';
+  var y = headerY + 30;
+  var totals = { sessions: 0, owed: 0, paid: 0, remaining: 0 };
+  rows.forEach(function (r) {
+    ctx.fillStyle = '#1c1c1e';
+    ctx.fillText(r.name, cols.name, y);
+    ctx.fillText(String(r.sessions), cols.sessions, y);
+    ctx.fillText('€' + formatMoney(r.rate), cols.rate, y);
+    ctx.fillText('€' + formatMoney(r.owed), cols.owed, y);
+    ctx.fillText('€' + formatMoney(r.paid), cols.paid, y);
+    ctx.fillText('€' + formatMoney(r.remaining), cols.remaining, y);
+    totals.sessions += r.sessions; totals.owed += r.owed; totals.paid += r.paid; totals.remaining += r.remaining;
+    y += rowH;
+  });
+
+  ctx.beginPath(); ctx.moveTo(30, y - 16); ctx.lineTo(pageW - 30, y - 16); ctx.stroke();
+  ctx.font = 'bold 12px -apple-system, sans-serif';
+  ctx.fillText('TOTAL', cols.name, y);
+  ctx.fillText(String(totals.sessions), cols.sessions, y);
+  ctx.fillText('€' + formatMoney(totals.owed), cols.owed, y);
+  ctx.fillText('€' + formatMoney(totals.paid), cols.paid, y);
+  ctx.fillText('€' + formatMoney(totals.remaining), cols.remaining, y);
+
+  var dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  var base64 = dataUrl.split(',')[1];
+  var binary = atob(base64);
+  var bytes = new Uint8Array(binary.length);
+  for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+  return { bytes: bytes, pageW: pageW, pageH: pageH, pxW: canvas.width, pxH: canvas.height };
+}
+
+function buildSinglePageImagePdf(jpeg) {
+  var enc = new TextEncoder();
+  var chunks = [];
+  var total = 0;
+  function addText(s) { var b = enc.encode(s); chunks.push(b); total += b.length; return total; }
+  function addBytes(b) { chunks.push(b); total += b.length; return total; }
+
+  var objOffsets = [];
+  addText('%PDF-1.4\n');
+
+  objOffsets[1] = total;
+  addText('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+
+  objOffsets[2] = total;
+  addText('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n');
+
+  objOffsets[3] = total;
+  addText('3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + jpeg.pageW + ' ' + jpeg.pageH + '] /Resources << /XObject << /Im0 5 0 R >> >> /Contents 4 0 R >>\nendobj\n');
+
+  var content = 'q ' + jpeg.pageW + ' 0 0 ' + jpeg.pageH + ' 0 0 cm /Im0 Do Q';
+  objOffsets[4] = total;
+  addText('4 0 obj\n<< /Length ' + content.length + ' >>\nstream\n' + content + '\nendstream\nendobj\n');
+
+  objOffsets[5] = total;
+  addText('5 0 obj\n<< /Type /XObject /Subtype /Image /Width ' + jpeg.pxW + ' /Height ' + jpeg.pxH + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + jpeg.bytes.length + ' >>\nstream\n');
+  addBytes(jpeg.bytes);
+  addText('\nendstream\nendobj\n');
+
+  var xrefStart = total;
+  var xref = 'xref\n0 6\n0000000000 65535 f \n';
+  for (var i = 1; i <= 5; i++) xref += String(objOffsets[i]).padStart(10, '0') + ' 00000 n \n';
+  addText(xref);
+  addText('trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n' + xrefStart + '\n%%EOF');
+
+  var result = new Uint8Array(total);
+  var pos = 0;
+  chunks.forEach(function (c) { result.set(c, pos); pos += c.length; });
+  return result;
+}
+
+function exportPayoutsPdf() {
+  var year = monthKeyOf(state.todayISO).split('-')[0];
+  var rows = computeYearlyPayoutRows(year);
+  var jpeg = buildPayoutsReportJpeg(year, rows);
+  var pdfBytes = buildSinglePageImagePdf(jpeg);
+
+  var blob = new Blob([pdfBytes], { type: 'application/pdf' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
-  a.download = 'gymflow-backup-' + state.todayISO + '.json';
+  a.download = 'gymflow-payouts-' + year + '.pdf';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
-  showToast('Backup exported');
-}
-
-function handleImportFile(file) {
-  var reader = new FileReader();
-  reader.onload = function (e) {
-    var data;
-    try {
-      data = JSON.parse(e.target.result);
-    } catch (err) {
-      showToast('That file isn\'t a valid backup');
-      return;
-    }
-    if (!data || typeof data !== 'object' || data.app !== 'gymflow') {
-      showToast('That file isn\'t a valid GymFlow backup');
-      return;
-    }
-    state.importDraft = data;
-    renderImportModal();
-  };
-  reader.onerror = function () { showToast('Could not read that file'); };
-  reader.readAsText(file);
-}
-function closeImportModal() {
-  state.importDraft = null;
-  document.getElementById('modalOverlay').classList.remove('open');
-  render();
-}
-function renderImportModal() {
-  var overlay = document.getElementById('modalOverlay');
-  var card = document.getElementById('modalCard');
-  var data = state.importDraft;
-  if (!data) { overlay.classList.remove('open'); return; }
-
-  var when = data.exportedAt ? new Date(data.exportedAt).toLocaleString() : 'an unknown time';
-  var html = '<div class="modal-title">Import Backup?</div>';
-  html += '<div style="text-align:center;font-size:13px;color:#555;margin:0 0 16px 0;line-height:1.4;">This backup was exported on <b>' + escapeHtml(when) + '</b>. Importing it will <b>replace all current data</b> — appointments, rates, payments, and notes. This can\'t be undone.</div>';
-  html += '<div class="modal-buttons"><button class="btn-text" id="btnImportCancel">Cancel</button><button class="btn-destructive" id="btnImportConfirm">Import</button></div>';
-
-  card.innerHTML = html;
-  overlay.classList.add('open');
-
-  document.getElementById('btnImportCancel').onclick = closeImportModal;
-  document.getElementById('btnImportConfirm').onclick = function () {
-    if (Array.isArray(data.slots) && data.slots.length) {
-      state.slots = data.slots.slice().sort();
-      saveSlots(state.slots);
-    }
-    if (data.rates && typeof data.rates === 'object') {
-      state.rates = data.rates;
-      NAMES.forEach(function (n) { if (typeof state.rates[n] !== 'number') state.rates[n] = 0; });
-      saveRates(state.rates);
-    }
-    if (data.attendance && typeof data.attendance === 'object') {
-      state.attendance = data.attendance;
-      saveAttendance(state.attendance);
-    }
-    if (data.notes && typeof data.notes === 'object') {
-      state.notes = data.notes;
-      saveNotes(state.notes);
-    }
-    if (data.paidAmounts && typeof data.paidAmounts === 'object') {
-      state.paidAmounts = data.paidAmounts;
-      savePaidAmounts(state.paidAmounts);
-    }
-    state.importDraft = null;
-    document.getElementById('modalOverlay').classList.remove('open');
-    render();
-    showToast('Backup imported');
-  };
+  showToast('Payouts PDF exported');
 }
 
 var lastRenderedTab = null;
@@ -1834,15 +1880,8 @@ document.getElementById('modalOverlay').onclick = function (e) {
   if (state.slotsModalOpen) closeSlotsModal();
   if (state.activeSlotCell) closeSlotCellModal();
   if (state.paidModalName) closePaidModal();
-  if (state.importDraft) closeImportModal();
   if (state.addMemberOpen) closeAddMemberModal();
   if (state.clearBusiestAction) closeClearBusiestModal();
-};
-
-document.getElementById('importFileInput').onchange = function (e) {
-  var file = e.target.files && e.target.files[0];
-  if (file) handleImportFile(file);
-  e.target.value = ''; // allow importing the same filename again later
 };
 
 // -- In-app reminder/alarm loop --
