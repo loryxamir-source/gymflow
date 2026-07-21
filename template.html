@@ -110,17 +110,23 @@ body {
   position: relative;
 }
 
-#bg {
+.tab-bg {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background-image: url(data:image/jpeg;base64,{{BG_BASE64}});
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
-  opacity: 0.15;
+  opacity: 0;
   pointer-events: none;
   z-index: 0;
+  transition: opacity 200ms ease;
 }
+.tab-bg.active { opacity: 0.15; }
+
+#bg { background-image: url(data:image/jpeg;base64,{{BG_BASE64}}); }
+#bg-payouts { background-image: url(data:image/jpeg;base64,{{BG_PAYOUTS_BASE64}}); }
+#bg-members { background-image: url(data:image/jpeg;base64,{{BG_MEMBERS_BASE64}}); }
+#bg-stats { background-image: url(data:image/jpeg;base64,{{BG_STATS_BASE64}}); }
 
 #app { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
 
@@ -368,7 +374,10 @@ body {
 </style>
 </head>
 <body>
-<div id="bg"></div>
+<div id="bg" class="tab-bg active"></div>
+<div id="bg-payouts" class="tab-bg"></div>
+<div id="bg-members" class="tab-bg"></div>
+<div id="bg-stats" class="tab-bg"></div>
 <div id="app"></div>
 <div id="skeleton">
   <div class="skel-topbar">
@@ -1930,6 +1939,14 @@ var lastRenderedTab = null;
 var SCROLLABLE_LIST_SELECTOR = '.slot-list, .payouts-list, .members-list, .stats-tab-list';
 var pendingPopCell = null; // { isoDate, slot } — set right before a save that added a new booking
 
+var TAB_BG_IDS = { board: 'bg', payouts: 'bg-payouts', members: 'bg-members', stats: 'bg-stats' };
+function updateTabBackground(activeTab) {
+  Object.keys(TAB_BG_IDS).forEach(function (tab) {
+    var el = document.getElementById(TAB_BG_IDS[tab]);
+    if (el) el.classList.toggle('active', tab === activeTab);
+  });
+}
+
 function render() {
   var app = document.getElementById('app');
 
@@ -1940,6 +1957,8 @@ function render() {
   var previousTab = lastRenderedTab;
   var tabChanged = previousTab !== state.activeTab;
   var prevScrollTop = (prevScrollEl && !tabChanged) ? prevScrollEl.scrollTop : 0;
+
+  if (tabChanged) updateTabBackground(state.activeTab);
 
   var html = '';
   if (!safeStorage.isPersistent) {
