@@ -227,6 +227,16 @@ body {
 }
 .slot-cell.filled { background: #007aff; color: #fff; box-shadow: 0 3px 8px rgba(0, 122, 255, 0.4); }
 .slot-cell.completed { background: #34c759; color: #fff; box-shadow: 0 3px 8px rgba(52, 199, 89, 0.4); }
+.slot-cell.drag-over { outline: 2px dashed #fff; outline-offset: -4px; transform: scale(1.04); }
+
+.name-chip { display: inline-block; }
+.name-chip.dragging-source { opacity: 0.35; }
+.drag-clone-chip {
+  position: fixed; z-index: 9999; pointer-events: none;
+  padding: 6px 12px; border-radius: 8px; background: #007aff; color: #fff;
+  font-family: 'Roboto', -apple-system, sans-serif; font-weight: bold; font-size: 12px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35); transform: scale(1.08);
+}
 
 @keyframes cellPop {
   0% { transform: scale(1); }
@@ -1171,8 +1181,15 @@ function renderBoardTab() {
     var cls = 'slot-cell';
     if (bookedNames.length > 0 && !completed) cls += ' filled';
     if (completed) cls += ' completed';
-    var hasNote = bookedNames.some(function (name) { return !!state.notes[attendKey(dayISO, slot, name)]; });
-    var label = bookedNames.length ? (bookedNames.join(', ') + (hasNote ? ' 💬' : '')) : '— tap to assign —';
+    var label;
+    if (bookedNames.length) {
+      label = bookedNames.map(function (name) {
+        var noteFlag = state.notes[attendKey(dayISO, slot, name)] ? ' 💬' : '';
+        return '<span class="name-chip" data-name="' + escapeHtml(name) + '">' + escapeHtml(name) + noteFlag + '</span>';
+      }).join(', ');
+    } else {
+      label = '— tap to assign —';
+    }
 
     html += '<div class="slot-row">';
     html += '  <div class="slot-time">' + slot + '</div>';
@@ -1196,6 +1213,169 @@ function wireBoardTab() {
       openSlotCellModal(cellEl.getAttribute('data-day'), cellEl.getAttribute('data-slot'), cellEl.getAttribute('data-daylabel'));
     };
   });
+
+  Array.prototype.forEach.call(document.querySelectorAll('.name-chip'), function (chipEl) {
+    var armTimer = null;
+    var armed = false;
+    var startX = 0, startY = 0;
+
+    chipEl.addEventListener('touchstart', function (e) {
+      var t = e.touches[0];
+      startX = t.clientX; startY = t.clientY;
+      armed = false;
+      clearTimeout(armTimer);
+      armTimer = setTimeout(function () {
+        armed = true;
+        beginDrag(chipEl, t.clientX, t.clientY);
+      }, 160);
+    }, { passive: true });
+
+    chipEl.addEventListener('touchmove', function (e) {
+      var t = e.touches[0];
+      if (!armed) {
+        // Moved before the arm-timer fired — this is a scroll/tap, not a drag.
+        if (Math.abs(t.clientX - startX) > 8 || Math.abs(t.clientY - startY) > 8) {
+          clearTimeout(armTimer);
+        }
+        return;
+      }
+      e.preventDefault();
+      updateChipDrag(t.clientX, t.clientY);
+    }, { passive: false });
+
+    chipEl.addEventListener('touchend', function () {
+      clearTimeout(armTimer);
+      if (armed) endChipDrag();
+      armed = false;
+    }, { passive: true });
+
+    chipEl.addEventListener('touchcancel', function () {
+      clearTimeout(armTimer);
+      if (armed) cancelChipDrag();
+      armed = false;
+    }, { passive: true });
+  });
+}
+
+var chipDragCtx = null; // transient, not part of state — reset every render
+function beginDrag(chipEl, x, y) {
+  var rect = chipEl.getBoundingClientRect();
+  var sourceCellEl = chipEl.closest('.slot-cell');
+  var clone = document.createElement('div');
+  clone.className = 'drag-clone-chip';
+  clone.textContent = chipEl.getAttribute('data-name');
+  clone.style.left = rect.left + 'px';
+  clone.style.top = rect.top + 'px';
+  document.body.appendChild(clone);
+  chipEl.classList.add('dragging-source');
+
+  chipDragCtx = {
+    isoDate: sourceCellEl.getAttribute('data-day'),
+    fromSlot: sourceCellEl.getAttribute('data-slot'),
+    dayLabel: sourceCellEl.getAttribute('data-daylabel'),
+    name: chipEl.getAttribute('data-name'),
+    clone: clone,
+    offsetX: x - rect.left,
+    offsetY: y - rect.top,
+    sourceChipEl: chipEl,
+    sourceCellEl: sourceCellEl,
+    lastOverCellEl: null,
+    pointerX: x,
+    pointerY: y,
+    autoScrollRAF: null,
+  };
+  if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+  startChipDragAutoScroll();
+}
+function refreshChipDragTargetAndClone(x, y) {
+  if (!chipDragCtx) return;
+  chipDragCtx.clone.style.left = (x - chipDragCtx.offsetX) + 'px';
+  chipDragCtx.clone.style.top = (y - chipDragCtx.offsetY) + 'px';
+
+  chipDragCtx.clone.style.display = 'none';
+  var el = document.elementFromPoint(x, y);
+  chipDragCtx.clone.style.display = '';
+  var cellEl = el ? el.closest('.slot-cell') : null;
+
+  if (chipDragCtx.lastOverCellEl && chipDragCtx.lastOverCellEl !== cellEl) {
+    chipDragCtx.lastOverCellEl.classList.remove('drag-over');
+  }
+  if (cellEl) cellEl.classList.add('drag-over');
+  chipDragCtx.lastOverCellEl = cellEl;
+}
+function updateChipDrag(x, y) {
+  if (!chipDragCtx) return;
+  chipDragCtx.pointerX = x;
+  chipDragCtx.pointerY = y;
+  refreshChipDragTargetAndClone(x, y);
+}
+// Runs continuously via rAF (not just on touchmove) so it keeps scrolling
+// even while the finger holds still near the top/bottom edge of the list.
+function startChipDragAutoScroll() {
+  var EDGE = 50, MAX_SPEED = 12;
+  function step() {
+    if (!chipDragCtx) return;
+    var listEl = document.querySelector('.slot-list');
+    if (listEl) {
+      var rect = listEl.getBoundingClientRect();
+      var y = chipDragCtx.pointerY;
+      var speed = 0;
+      if (y < rect.top + EDGE) speed = -MAX_SPEED * ((rect.top + EDGE - y) / EDGE);
+      else if (y > rect.bottom - EDGE) speed = MAX_SPEED * ((y - (rect.bottom - EDGE)) / EDGE);
+      if (speed !== 0) {
+        listEl.scrollTop += speed;
+        refreshChipDragTargetAndClone(chipDragCtx.pointerX, chipDragCtx.pointerY);
+      }
+    }
+    chipDragCtx.autoScrollRAF = requestAnimationFrame(step);
+  }
+  chipDragCtx.autoScrollRAF = requestAnimationFrame(step);
+}
+function endChipDrag() {
+  if (!chipDragCtx) return;
+  var toSlot = chipDragCtx.lastOverCellEl ? chipDragCtx.lastOverCellEl.getAttribute('data-slot') : null;
+  var isoDate = chipDragCtx.isoDate, fromSlot = chipDragCtx.fromSlot, name = chipDragCtx.name;
+  cleanupChipDrag();
+
+  if (!toSlot || toSlot === fromSlot) { render(); return; }
+
+  var oldKey = attendKey(isoDate, fromSlot, name);
+  var newKey = attendKey(isoDate, toSlot, name);
+  if (state.attendance[newKey]) {
+    showToast(name + ' is already booked at ' + toSlot);
+    render();
+    return;
+  }
+
+  // Move the booking and carry its note/no-show flags along — nothing at the
+  // destination is touched or overwritten since we already confirmed it's free.
+  delete state.attendance[oldKey];
+  state.attendance[newKey] = true;
+  saveAttendance(state.attendance);
+
+  if (state.notes[oldKey]) {
+    state.notes[newKey] = state.notes[oldKey];
+    delete state.notes[oldKey];
+    saveNotes(state.notes);
+  }
+  if (state.noShows[oldKey]) {
+    state.noShows[newKey] = state.noShows[oldKey];
+    delete state.noShows[oldKey];
+    saveNoShows(state.noShows);
+  }
+
+  showToast(name + ' moved to ' + toSlot);
+  pendingPopCell = { isoDate: isoDate, slot: toSlot };
+  render();
+}
+function cancelChipDrag() { cleanupChipDrag(); render(); }
+function cleanupChipDrag() {
+  if (!chipDragCtx) return;
+  if (chipDragCtx.autoScrollRAF) cancelAnimationFrame(chipDragCtx.autoScrollRAF);
+  if (chipDragCtx.clone && chipDragCtx.clone.parentNode) chipDragCtx.clone.parentNode.removeChild(chipDragCtx.clone);
+  if (chipDragCtx.lastOverCellEl) chipDragCtx.lastOverCellEl.classList.remove('drag-over');
+  if (chipDragCtx.sourceChipEl) chipDragCtx.sourceChipEl.classList.remove('dragging-source');
+  chipDragCtx = null;
 }
 
 function monthKeyForOffset(offset) {
