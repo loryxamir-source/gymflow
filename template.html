@@ -224,12 +224,13 @@ body {
 .slot-cell {
   flex: 1; min-width: 0; padding: 10px 8px; border-radius: 8px; background: var(--bg-surface); border: none;
   font-family: 'Roboto', -apple-system, sans-serif; font-weight: bold; font-size: 11px; color: var(--text-secondary); text-align: center;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
 .slot-cell.filled { background: #007aff; color: #fff; box-shadow: 0 3px 8px rgba(0, 122, 255, 0.4); }
 .slot-cell.completed { background: #34c759; color: #fff; box-shadow: 0 3px 8px rgba(52, 199, 89, 0.4); }
 .slot-cell.drag-over { outline: 2px dashed #fff; outline-offset: -4px; transform: scale(1.04); }
 
-.name-chip { display: inline-block; }
+.name-chip { display: inline-block; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .name-chip.dragging-source { opacity: 0.35; }
 .drag-clone-chip {
   position: fixed; z-index: 9999; pointer-events: none;

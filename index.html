@@ -224,12 +224,13 @@ body {
 .slot-cell {
   flex: 1; min-width: 0; padding: 10px 8px; border-radius: 8px; background: var(--bg-surface); border: none;
   font-family: 'Roboto', -apple-system, sans-serif; font-weight: bold; font-size: 11px; color: var(--text-secondary); text-align: center;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
 .slot-cell.filled { background: #007aff; color: #fff; box-shadow: 0 3px 8px rgba(0, 122, 255, 0.4); }
 .slot-cell.completed { background: #34c759; color: #fff; box-shadow: 0 3px 8px rgba(52, 199, 89, 0.4); }
 .slot-cell.drag-over { outline: 2px dashed #fff; outline-offset: -4px; transform: scale(1.04); }
 
-.name-chip { display: inline-block; }
+.name-chip { display: inline-block; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .name-chip.dragging-source { opacity: 0.35; }
 .drag-clone-chip {
   position: fixed; z-index: 9999; pointer-events: none;
@@ -462,7 +463,7 @@ var DEFAULT_NAMES = [
 var DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-var BUILD_VERSION_LABEL = '1784640649056';
+var BUILD_VERSION_LABEL = '1784641349766';
 
 var OLD_SCHEDULE_KEY = 'gymflow.schedule.v1'; // legacy per-name-per-day model, read only (migration source)
 var ATTEND_KEY = 'gymflow.attendance.v2';
@@ -2320,7 +2321,7 @@ setTimeout(function () {
 // automatically instead of getting stuck on a stale cached copy. --
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=1784640649056').then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=1784641349766').then(function (reg) {
       reg.update();
     }).catch(function () { /* ignore */ });
 
