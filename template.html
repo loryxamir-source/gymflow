@@ -229,6 +229,7 @@ body {
 .slot-cell.filled { background: #007aff; color: #fff; box-shadow: 0 3px 8px rgba(0, 122, 255, 0.4); }
 .slot-cell.completed { background: #34c759; color: #fff; box-shadow: 0 3px 8px rgba(52, 199, 89, 0.4); }
 .slot-cell.drag-over { outline: 2px dashed #fff; outline-offset: -4px; transform: scale(1.04); }
+.slot-cell.dragging-source { opacity: 0.35; }
 
 .name-chip { display: inline-block; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .name-chip.dragging-source { opacity: 0.35; }
@@ -1215,23 +1216,26 @@ function wireBoardTab() {
     };
   });
 
-  Array.prototype.forEach.call(document.querySelectorAll('.name-chip'), function (chipEl) {
+  Array.prototype.forEach.call(document.querySelectorAll('.slot-cell.filled, .slot-cell.completed'), function (cellEl) {
     var armTimer = null;
     var armed = false;
     var startX = 0, startY = 0;
+    var dragName = null;
 
-    chipEl.addEventListener('touchstart', function (e) {
+    cellEl.addEventListener('touchstart', function (e) {
       var t = e.touches[0];
       startX = t.clientX; startY = t.clientY;
       armed = false;
+      dragName = resolveDragName(cellEl, t.clientX, t.clientY);
       clearTimeout(armTimer);
+      if (!dragName) return;
       armTimer = setTimeout(function () {
         armed = true;
-        beginDrag(chipEl, t.clientX, t.clientY);
-      }, 160);
+        beginDrag(cellEl, dragName, t.clientX, t.clientY);
+      }, 80);
     }, { passive: true });
 
-    chipEl.addEventListener('touchmove', function (e) {
+    cellEl.addEventListener('touchmove', function (e) {
       var t = e.touches[0];
       if (!armed) {
         // Moved before the arm-timer fired — this is a scroll/tap, not a drag.
@@ -1244,13 +1248,13 @@ function wireBoardTab() {
       updateChipDrag(t.clientX, t.clientY);
     }, { passive: false });
 
-    chipEl.addEventListener('touchend', function () {
+    cellEl.addEventListener('touchend', function () {
       clearTimeout(armTimer);
       if (armed) endChipDrag();
       armed = false;
     }, { passive: true });
 
-    chipEl.addEventListener('touchcancel', function () {
+    cellEl.addEventListener('touchcancel', function () {
       clearTimeout(armTimer);
       if (armed) cancelChipDrag();
       armed = false;
@@ -1258,27 +1262,43 @@ function wireBoardTab() {
   });
 }
 
+// Picks which booked name a touch on a (possibly multi-name) slot cell should
+// drag: the chip nearest the touch point if there's more than one, otherwise
+// the only name present. Lets the whole cell area act as the drag handle
+// instead of forcing a precise touch on the name text itself.
+function resolveDragName(cellEl, x, y) {
+  var chips = cellEl.querySelectorAll('.name-chip');
+  if (!chips.length) return null;
+  if (chips.length === 1) return chips[0].getAttribute('data-name');
+  var best = null, bestDist = Infinity;
+  Array.prototype.forEach.call(chips, function (chipEl) {
+    var r = chipEl.getBoundingClientRect();
+    var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    var dist = Math.pow(x - cx, 2) + Math.pow(y - cy, 2);
+    if (dist < bestDist) { bestDist = dist; best = chipEl; }
+  });
+  return best ? best.getAttribute('data-name') : null;
+}
+
 var chipDragCtx = null; // transient, not part of state — reset every render
-function beginDrag(chipEl, x, y) {
-  var rect = chipEl.getBoundingClientRect();
-  var sourceCellEl = chipEl.closest('.slot-cell');
+function beginDrag(sourceCellEl, name, x, y) {
+  var rect = sourceCellEl.getBoundingClientRect();
   var clone = document.createElement('div');
   clone.className = 'drag-clone-chip';
-  clone.textContent = chipEl.getAttribute('data-name');
+  clone.textContent = name;
   clone.style.left = rect.left + 'px';
   clone.style.top = rect.top + 'px';
   document.body.appendChild(clone);
-  chipEl.classList.add('dragging-source');
+  sourceCellEl.classList.add('dragging-source');
 
   chipDragCtx = {
     isoDate: sourceCellEl.getAttribute('data-day'),
     fromSlot: sourceCellEl.getAttribute('data-slot'),
     dayLabel: sourceCellEl.getAttribute('data-daylabel'),
-    name: chipEl.getAttribute('data-name'),
+    name: name,
     clone: clone,
     offsetX: x - rect.left,
     offsetY: y - rect.top,
-    sourceChipEl: chipEl,
     sourceCellEl: sourceCellEl,
     lastOverCellEl: null,
     pointerX: x,
@@ -1375,7 +1395,7 @@ function cleanupChipDrag() {
   if (chipDragCtx.autoScrollRAF) cancelAnimationFrame(chipDragCtx.autoScrollRAF);
   if (chipDragCtx.clone && chipDragCtx.clone.parentNode) chipDragCtx.clone.parentNode.removeChild(chipDragCtx.clone);
   if (chipDragCtx.lastOverCellEl) chipDragCtx.lastOverCellEl.classList.remove('drag-over');
-  if (chipDragCtx.sourceChipEl) chipDragCtx.sourceChipEl.classList.remove('dragging-source');
+  if (chipDragCtx.sourceCellEl) chipDragCtx.sourceCellEl.classList.remove('dragging-source');
   chipDragCtx = null;
 }
 
